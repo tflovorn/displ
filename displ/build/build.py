@@ -1,10 +1,13 @@
 import argparse
 import os
+from copy import deepcopy
+import json
 import numpy as np
 from ase import Atoms
 import ase.db
 from displ.pwscf.build import build_pw2wan, build_bands, build_qe
 from displ.wannier.build import Winfile
+from displ.queue.queuefile import write_queuefile, write_job_group_files, write_launcherfiles
 from displ.build.cell import make_cell
 from displ.build.util import _base_dir, _global_config
 
@@ -144,9 +147,6 @@ def get_wann_valence(at_syms, soc=True):
 
     wann_valence = {}
     for sym in at_syms:
-        if sym in wann_valence:
-            continue
-
         if sym in Ms:
             if soc:
                 num_wann += 10
@@ -176,12 +176,15 @@ def _extract_syms(syms_str):
     syms = syms_str.split(';')
     return syms
 
-def _get_work(subdir, prefix):
+def _get_base_path(subdir):
     work = os.path.expandvars(_global_config()['work_base'])
     if subdir is not None:
         work = os.path.join(work, subdir)
 
-    work = os.path.join(work, prefix)
+    return work
+
+def _get_work(subdir, prefix):
+    work = os.path.join(_get_base_path(subdir), prefix)
 
     if not os.path.exists(work):
         os.makedirs(work)
@@ -192,6 +195,73 @@ def _write_qe_input(prefix, file_dir, qe_input, calc_type):
     file_path = os.path.join(file_dir, "{}.{}.in".format(prefix, calc_type))
     with open(file_path, 'w') as fp:
         fp.write(qe_input[calc_type])
+
+def group_jobs(config, prefix_list):
+    max_jobs = config["max_jobs"]
+
+    groups = []
+    for i, prefix in enumerate(prefix_list):
+        group_id = i % max_jobs
+        if len(groups) <= group_id:
+            groups.append([])
+
+        groups[group_id].append(prefix)
+
+    return groups
+
+def _write_queuefiles(base_path, prefixes, config):
+    for prefix in prefixes:
+        _write_system_queuefile(base_path, prefix, config)
+
+    prefix_groups = group_jobs(config, prefixes)
+    _write_prefix_groups(base_path, config["global_prefix"], prefix_groups)
+    config["base_path"] = base_path
+
+    wan_setup_group_config = deepcopy(config)
+    wan_setup_group_config["calc"] = "wan_setup"
+    write_job_group_files(wan_setup_group_config, prefix_groups)
+
+    pw_post_group_config = deepcopy(config)
+    pw_post_group_config["calc"] = "pw_post"
+    pw_post_group_config["nodes"] = 1
+    cores_per_node = int(config["cores"] / config["nodes"])
+    pw_post_group_config["cores"] = cores_per_node
+    write_job_group_files(pw_post_group_config, prefix_groups)
+
+    launcher_config = deepcopy(config)
+    launcher_config["prefix_list"] = prefixes
+    launcher_config["calc"] = "wan_run"
+    num_systems = len(prefixes)
+    # Do 4 Wannier90 runs per core (Wannier90 runtime is quick - minimize time
+    # in queue).
+    num_wannier_nodes = np.ceil(num_systems / (4*cores_per_node))
+    num_wannier_cores = num_wannier_nodes * cores_per_node
+    launcher_config["nodes"] = num_wannier_nodes
+    launcher_config["cores"] = num_wannier_cores
+    write_launcherfiles(launcher_config)
+
+    return prefix_groups
+
+def _write_system_queuefile(base_path, prefix, config):
+    config["base_path"] = base_path
+    config["prefix"] = prefix
+
+    for calc in ["wan_setup", "pw_post", "wan_run"]:
+        _write_queuefile_calc(config, calc)
+
+def _write_queuefile_calc(config, calc):
+    calc_config = deepcopy(config)
+    calc_config["calc"] = calc
+    write_queuefile(calc_config)
+
+def _write_prefix_groups(base_path, global_prefix, prefix_groups):
+    groups_path = _prefix_groups_path(base_path, global_prefix)
+    with open(groups_path, 'w') as fp:
+        json.dump(prefix_groups, fp)
+
+def _prefix_groups_path(base_path, global_prefix):
+    groups_path = os.path.join(base_path, "{}_prefix_groups.json".format(global_prefix))
+    return groups_path
 
 def _main():
     parser = argparse.ArgumentParser("Build and run calculation over displacement field values",
@@ -217,6 +287,7 @@ def _main():
     args = parser.parse_args()
 
     syms = _extract_syms(args.syms)
+    global_prefix = "_".join(syms)
 
     soc = not args.no_soc
 
@@ -239,10 +310,12 @@ def _main():
 
     Ds = np.linspace(args.minD, args.maxD, args.numD)
 
+    prefixes = []
     for D in Ds:
         qe_config = make_qe_config(system, D, soc, num_bands, args.xc, args.pp)
 
-        prefix = "{}_{}".format('_'.join(syms), str(D))
+        prefix = "{}_{}".format(global_prefix, str(D))
+        prefixes.append(prefix)
         work = _get_work(args.subdir, prefix)
 
         wannier_dir = os.path.join(work, "wannier")
@@ -274,6 +347,17 @@ def _main():
         win_path = os.path.join(wannier_dir, "{}.win".format(prefix))
         with open(win_path, 'w') as fp:
             fp.write(wannier_input)
+
+    num_nodes = 1
+    num_cores = 24*num_nodes
+    queue_config = {"machine": "ls5", "cores": num_cores, "nodes": num_nodes, "queue": "normal",
+            "hours": 12, "minutes": 0, "wannier": True, "project": "A-ph9",
+            "global_prefix": global_prefix, "max_jobs": 1,
+            "outer_min": -10.0, "outer_max": 7.0,
+            "inner_min": -8.0, "inner_max": 3.0,
+            "subdir": args.subdir, "qe_bands":_global_config()['qe_bands']}
+
+    _write_queuefiles(_get_base_path(args.subdir), prefixes, queue_config)
 
 if __name__ == '__main__':
     _main()

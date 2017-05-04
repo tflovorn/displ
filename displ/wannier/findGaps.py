@@ -1,4 +1,4 @@
-from mkheusler.wannier.Dos import Dos
+from displ.wannier.Dos import Dos
 
 def HrFindGaps(minE, maxE, num_dos, na, nb, nc, R, HrPath):
     dos_vals, E_vals = Dos(minE, maxE, num_dos, na, nb, nc, R, HrPath)

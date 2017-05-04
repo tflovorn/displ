@@ -1,7 +1,7 @@
 import os
 import subprocess
-from tmd.queue.queuefile import get_qf_path
-from tmd.queue.queue_util import global_config
+from displ.queue.queuefile import get_qf_path
+from displ.queue.queue_util import global_config
 
 def enqueue(config):
     # Assumes appropriate queufile already exists.

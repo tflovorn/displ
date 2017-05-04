@@ -1,5 +1,5 @@
 from copy import deepcopy
-from mkheusler.pwscf.build import get_cell, nscf_ks
+from displ.pwscf.build import get_cell, nscf_ks
 
 def Header(nbnd, num_wann):
     lines = ["num_bands = {}".format(str(nbnd))]

@@ -1,8 +1,8 @@
 import os
 import subprocess
 from uuid import uuid4
-from mkheusler.wannier.wannier_util import _base_dir
-from mkheusler.wannier.bands import Hk_recip
+from displ.wannier.wannier_util import _base_dir
+from displ.wannier.bands import Hk_recip
 
 def Dos(minE, maxE, num_dos, na, nb, nc, R, HrPath):
     '''Return two lists, dos_vals and E_vals. dos_vals contains the density

@@ -1,5 +1,5 @@
 import unittest
-from mkheusler.wannier.extractHr import extractHr
+from displ.wannier.extractHr import extractHr
 
 class TestExtractHr(unittest.TestCase):
     def test_extractHrFe(self):

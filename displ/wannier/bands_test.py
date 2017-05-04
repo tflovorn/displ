@@ -2,8 +2,8 @@ import unittest
 import numpy as np
 import numpy.matlib as matlib
 from numpy.linalg import inv
-from mkheusler.wannier.extractHr import extractHr
-from mkheusler.wannier.bands import Hk, dHk_dk
+from displ.wannier.extractHr import extractHr
+from displ.wannier.bands import Hk, dHk_dk
 
 class TestHk(unittest.TestCase):
     def test_HkFe(self):

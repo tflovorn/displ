@@ -3,10 +3,10 @@ import json
 import numpy as np
 from numpy import linalg
 import matplotlib.pyplot as plt
-from mkheusler.wannier.bands import Hk, Hk_recip
-from mkheusler.wannier.extractHr import extractHr
-from mkheusler.pwscf.extractQEBands import extractQEBands
-from mkheusler.pwscf.parseScf import alat_from_scf, latVecs_from_scf
+from displ.wannier.bands import Hk, Hk_recip
+from displ.wannier.extractHr import extractHr
+from displ.pwscf.extractQEBands import extractQEBands
+from displ.pwscf.parseScf import alat_from_scf, latVecs_from_scf
 
 # Switch to size eigenvalue intensity markers based on component values
 # (instead of only using color to denote component value).
