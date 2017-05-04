@@ -8,8 +8,27 @@ from displ.wannier.build import Winfile
 from displ.build.cell import make_cell
 from displ.build.util import _base_dir, _global_config
 
-def make_qe_config(system, soc, num_bands, xc, pp):
+def make_qe_config(system, D, soc, num_bands, xc, pp):
     latconst = 1.0 # positions in system are given in units of Angstrom
+
+    # Assume we take the electric field to be along the c axis.
+    edir = 3
+    
+    # Choose the descending voltage region of the voltage sawtooth to be
+    # 10% of the vacuum.
+    min_c, max_c = _get_c_extrema(system)
+    # Assume positions have not been wrapped (i.e. min_c and max_c are not
+    # separated by vacuum; the vacuum is between max_c and min_c + 1).
+    vac = min_c + 1 - max_c
+    eopreg = 0.1*vac
+    # Choose the center of the descending voltage region to be the center
+    # of the vacuum:
+    # (min(c) + 1 + max(c))/2 = (emaxpos + emaxpos + eopreg)/2.
+    emaxpos = (min_c + 1 + max_c - eopreg)/2
+
+    # D is in V/nm and eamp is in Ha a.u.:
+    # 1 a.u. = 5.14220632e2 V/nm --> 1 V/nm = 1.9446905e-3 a.u.
+    eamp = 1.9446905e-3 * D
 
     pseudo = get_pseudo(system.get_chemical_symbols(), soc, pp)
     pseudo_dir = get_pseudo_dir(soc, xc, pp)
@@ -33,9 +52,15 @@ def make_qe_config(system, soc, num_bands, xc, pp):
 
     qe_config = {"pseudo_dir": pseudo_dir, "pseudo": pseudo, "soc": soc, "latconst": latconst, 
             "num_bands": num_bands, "weight": weight, "ecutwfc": ecutwfc, "ecutrho": ecutrho,
-            "degauss": degauss, "conv_thr": conv_thr, "Nk": Nk, "band_path": band_path}
+            "degauss": degauss, "conv_thr": conv_thr, "Nk": Nk, "band_path": band_path,
+            "edir": edir, "emaxpos": emaxpos, "eopreg": eopreg, "eamp": eamp}
 
     return qe_config
+
+def _get_c_extrema(system):
+    all_pos = system.get_scaled_positions()
+    cs = [r[2] for r in all_pos]
+    return min(cs), max(cs)
 
 def get_pseudo(at_syms, soc=True, pp='nc'):
     pseudo = {}
@@ -177,14 +202,14 @@ def _main():
             help="Subdirectory under work_base to run calculation")
     parser.add_argument("--syms", type=str, default="WSe2;WSe2;WSe2",
             help="Semicolon-separated list of atomic composition of layers. Format example: WSe2;MoSe2;MoS2")
-    parser.add_argument("--minD", type=float, default=0.1,
-            help="Minimum displacement field")
-    parser.add_argument("--maxD", type=float, default=0.1,
-            help="Maximum displacement field")
+    parser.add_argument("--minD", type=float, default=0.01,
+            help="Minimum displacement field in V/nm")
+    parser.add_argument("--maxD", type=float, default=0.5,
+            help="Maximum displacement field in V/nm")
     parser.add_argument("--numD", type=int, default=10,
             help="Number of displacement field steps")
-    parser.add_argument("--soc", action="store_true",
-            help="Use spin-orbit coupling")
+    parser.add_argument("--no_soc", action="store_true",
+            help="Turn off spin-orbit coupling")
     parser.add_argument("--xc", type=str, default="lda",
             help="Exchange-correlation functional (lda or pbe)")
     parser.add_argument("--pp", type=str, default="nc",
@@ -192,6 +217,8 @@ def _main():
     args = parser.parse_args()
 
     syms = _extract_syms(args.syms)
+
+    soc = not args.no_soc
 
     db_path = os.path.join(_base_dir(), "c2dm.db")
     db = ase.db.connect(db_path)
@@ -207,26 +234,46 @@ def _main():
 
     system = Atoms(symbols=at_syms, positions=cartpos, cell=latvecs, pbc=True)
 
-    valence, num_wann = get_wann_valence(system.get_chemical_symbols(), args.soc)
+    wann_valence, num_wann = get_wann_valence(system.get_chemical_symbols(), soc)
     num_bands = get_num_bands(num_wann)
 
-    qe_config = make_qe_config(system, args.soc, num_bands, args.xc, args.pp)
+    Ds = np.linspace(args.minD, args.maxD, args.numD)
 
-    prefix = "tmp"
-    work = _get_work(args.subdir, prefix)
+    for D in Ds:
+        qe_config = make_qe_config(system, D, soc, num_bands, args.xc, args.pp)
 
-    wannier_dir = os.path.join(work, "wannier")
-    if not os.path.exists(wannier_dir):
-        os.makedirs(wannier_dir)
+        prefix = "{}_{}".format('_'.join(syms), str(D))
+        work = _get_work(args.subdir, prefix)
 
-    bands_dir = os.path.join(work, "bands")
-    if not os.path.exists(bands_dir):
-        os.makedirs(bands_dir)
+        wannier_dir = os.path.join(work, "wannier")
+        if not os.path.exists(wannier_dir):
+            os.makedirs(wannier_dir)
 
-    calc_type = 'scf'
-    qe_input = {}
-    qe_input['scf'] = build_qe(system, prefix, calc_type, qe_config)
-    _write_qe_input(prefix, wannier_dir, qe_input, 'scf')
+        bands_dir = os.path.join(work, "bands")
+        if not os.path.exists(bands_dir):
+            os.makedirs(bands_dir)
+
+        dirs = {'scf': wannier_dir, 'nscf': wannier_dir, 'bands': bands_dir}
+
+        qe_input = {}
+        for calc_type in ['scf', 'nscf', 'bands']:
+            qe_input[calc_type] = build_qe(system, prefix, calc_type, qe_config)
+            _write_qe_input(prefix, dirs[calc_type], qe_input, calc_type)
+
+        pw2wan_input = build_pw2wan(prefix, soc)
+        pw2wan_path = os.path.join(wannier_dir, "{}.pw2wan.in".format(prefix))
+        with open(pw2wan_path, 'w') as fp:
+            fp.write(pw2wan_input)
+
+        bands_post_input = build_bands(prefix)
+        bands_post_path = os.path.join(bands_dir, "{}.bands_post.in".format(prefix))
+        with open(bands_post_path, 'w') as fp:
+            fp.write(bands_post_input)
+
+        wannier_input = Winfile(system, qe_config, wann_valence, num_wann)
+        win_path = os.path.join(wannier_dir, "{}.win".format(prefix))
+        with open(win_path, 'w') as fp:
+            fp.write(wannier_input)
 
 if __name__ == '__main__':
     _main()
