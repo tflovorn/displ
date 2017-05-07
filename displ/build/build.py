@@ -234,7 +234,7 @@ def _write_queuefiles(base_path, prefixes, config):
     num_systems = len(prefixes)
     # Do 4 Wannier90 runs per core (Wannier90 runtime is quick - minimize time
     # in queue).
-    num_wannier_nodes = np.ceil(num_systems / (4*cores_per_node))
+    num_wannier_nodes = int(np.ceil(num_systems / (4*cores_per_node)))
     num_wannier_cores = num_wannier_nodes * cores_per_node
     launcher_config["nodes"] = num_wannier_nodes
     launcher_config["cores"] = num_wannier_cores
