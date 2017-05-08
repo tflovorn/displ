@@ -33,7 +33,7 @@ def symbols_from_2H(layer_system):
     # Consistent M, X, X order.
     return at_syms[0], at_syms[1]
 
-def make_cell(db, syms, c_bulk, vacuum_dist):
+def make_cell(db, syms, c_sep, vacuum_dist):
     layer_systems = [get_layer_system(db, sym, 'H') for sym in syms]
 
     # Choose lattice constant from first layer.
@@ -75,7 +75,7 @@ def make_cell(db, syms, c_bulk, vacuum_dist):
         cartpos.extend([np.array([pos[0], pos[1], z_pos])
                 for pos, z_pos in zip(layer_cartpos_2D, [X1_z, M_z, X2_z])])
 
-        base_z += c_bulk
+        base_z += c_sep
         if base_pos == 'A':
             base_pos = 'B'
         else:

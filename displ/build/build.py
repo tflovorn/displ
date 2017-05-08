@@ -8,7 +8,7 @@ import ase.db
 from displ.pwscf.build import build_pw2wan, build_bands, build_qe
 from displ.wannier.build import Winfile
 from displ.queue.queuefile import write_queuefile, write_job_group_files, write_launcherfiles
-from displ.build.cell import make_cell
+from displ.build.cell import make_cell, get_layer_system, h_from_2H
 from displ.build.util import _base_dir, _global_config
 
 def make_qe_config(system, D, soc, num_bands, xc, pp):
@@ -129,14 +129,42 @@ def get_weight(system):
 
     return weight
 
-def get_c_bulk(sym):
-    '''Bulk c-axis lattice constants from Table I of:
+def get_c_sep(db, sym):
+    '''Choose separation between layers for a system in which each layer is
+    given by the layer `sym`. This separation is assumed to be equal to
+    
+    (c_bulk - 2*h) / 2
+
+    Where c_bulk is the 2H bulk c-axis lattice constant (which includes 2 layers)
+    and h is the separation of chalcogens within the layer (giving the c-axis
+    extent of the layer).
+
+    i.e. the bulk cell has the structure:
+
+    X 0
+    M h/2
+    X h
+    --
+    X h + c_sep
+    M 3*h/2 + c_sep
+    X 2*h + c_sep
+    --
+    X 2*h + 2*c_sep = c_bulk
+
+    ==> 2*c_sep = c_bulk - 2*h ==> c_sep = (c_bulk - 2*h)/2
+
+    Bulk c-axis lattice constants here taken from Table I of:
     Yun et al., PRB 85, 033305 (2012)
     The a and c lattice constants given in this table are experimental values.
     '''
     c_bulk_values = {"MoS2": 12.296, "MoSe2": 12.939,
             "WS2": 12.349, "WSe2": 12.976}
-    return c_bulk_values[sym]
+    c_bulk = c_bulk_values[sym]
+
+    system = get_layer_system(db, sym, 'H')
+    h = h_from_2H(system)
+
+    return (c_bulk - 2*h)/2
 
 def get_wann_valence(at_syms, soc=True):
     Ms = ["Mo", "W"]
@@ -294,14 +322,14 @@ def _main():
     db_path = os.path.join(_base_dir(), "c2dm.db")
     db = ase.db.connect(db_path)
 
-    # Choose separation between layers as the bulk separation between
-    # layers of the first type.
+    # Choose separation between layers as if the system was a bulk system
+    # where all layers are the same as the first layer here.
     # TODO -- is there a better strategy for this?
-    c_bulk = get_c_bulk(syms[0])
+    c_sep = get_c_sep(db, syms[0])
 
     vacuum_dist = 20.0 # Angstrom
 
-    latvecs, at_syms, cartpos = make_cell(db, syms, c_bulk, vacuum_dist)
+    latvecs, at_syms, cartpos = make_cell(db, syms, c_sep, vacuum_dist)
 
     system = Atoms(symbols=at_syms, positions=cartpos, cell=latvecs, pbc=True)
 
