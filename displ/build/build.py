@@ -60,6 +60,9 @@ def make_qe_config(system, D, soc, num_bands, xc, pp):
 
     return qe_config
 
+def band_path_labels():
+    return ["$\\Gamma$", "$M$", "$K$", "$\\Gamma$"]
+
 def _get_c_extrema(system):
     all_pos = system.get_scaled_positions()
     cs = [r[2] for r in all_pos]

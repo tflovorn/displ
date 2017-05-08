@@ -26,10 +26,13 @@ def extractQEBands(filePath):
     # ev10 ev11 ...
     #
     # Always have 10 eigenalues per line.
-    # Each eigenvalue uses a maximum of 8 characters; eigenvalues may not be
-    # separated by a space.
+    # Each eigenvalue uses a maximum of chars_per_ev characters; in some cases
+    # eigenvalues may not be separated by a space.
     evnumlines = int(np.ceil(float(nbnd) / 10.0))
     knumlines = 1 + evnumlines
+    # In QE 6.0+, chars_per_ev = 9.
+    # Previously, chars_per_ev = 8.
+    chars_per_ev = 9
 
     all_evs = []
     for ik in range(nks):
@@ -48,8 +51,8 @@ def extractQEBands(filePath):
                 if evs_seen >= nbnd:
                     break
                 # Still have more eigenvalues; get the next one.
-                evstart = 8 * iev
-                ev = float(evline[evstart:evstart+8].strip())
+                evstart = chars_per_ev * iev
+                ev = float(evline[evstart:evstart+chars_per_ev].strip())
                 k_evs.append(ev)
         # Got all eigenvalues for this k-point; add to list.
         all_evs.append(((ka, kb, kc), k_evs))
