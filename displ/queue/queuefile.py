@@ -102,7 +102,7 @@ def _write_queuefile_ls5(config):
             qf.append("rm {}.wfc*".format(prefix))
     elif config["calc"] == "wan_run":
         wan_dir = os.path.join(config["base_path"], config["prefix"], "wannier")
-        update_dis = os.path.join(_base_dir(), "disp", "wannier", "update_dis.py")
+        update_dis = os.path.join(_base_dir(), "displ", "wannier", "update_dis.py")
         outer_min, outer_max = str(config["outer_min"]), str(config["outer_max"])
         inner_min, inner_max = str(config["inner_min"]), str(config["inner_max"])
         py_str = "python3 '{}' '{}' {} {} {} {}".format(update_dis, prefix, outer_min, outer_max, inner_min, inner_max)
