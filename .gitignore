@@ -2,3 +2,4 @@ displ.egg-info
 *.swp
 __pycache__
 *.png
+*_bands_export.json
