@@ -19,9 +19,9 @@ def _main():
     parser.add_argument("--fermi_shift", action='store_true',
             help="Shift plotted energies so that E_F = 0")
     parser.add_argument("--minE", type=float, default=None,
-            help="Minimum energy to plot, relative to E_F")
+            help="Minimum energy to plot")
     parser.add_argument("--maxE", type=float, default=None,
-            help="Maximum energy to plot, relative to E_F")
+            help="Maximum energy to plot")
     parser.add_argument("--plot_evecs", action='store_true',
             help="Plot eigenvector decomposition")
     parser.add_argument("--show", action='store_true',
@@ -34,8 +34,12 @@ def _main():
 
     E_F = fermi_from_scf(scf_path)
     if args.minE is not None and args.maxE is not None:
-        minE_plot = E_F + args.minE
-        maxE_plot = E_F + args.maxE
+        if args.fermi_shift:
+            minE_plot = E_F + args.minE
+            maxE_plot = E_F + args.maxE
+        else:
+            minE_plot = args.minE
+            maxE_plot = args.maxE
     else:
         minE_plot, maxE_plot = None, None
 
