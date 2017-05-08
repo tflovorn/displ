@@ -75,7 +75,7 @@ def make_cell(db, syms, c_sep, vacuum_dist):
         cartpos.extend([np.array([pos[0], pos[1], z_pos])
                 for pos, z_pos in zip(layer_cartpos_2D, [X1_z, M_z, X2_z])])
 
-        base_z += c_sep
+        base_z += h + c_sep
         if base_pos == 'A':
             base_pos = 'B'
         else:
