@@ -59,7 +59,7 @@ def build_qe(ase_system, prefix, calc_type, config):
     # These may be None.
     blocks = [("control", _control(calc_type, pseudo_dir, prefix)),
             ("system", _system(ase_system, calc_type, config)),
-            ("electrons", _electrons(conv_thr)),
+            ("electrons", _electrons(calc_type, conv_thr)),
             ("atomic_species", _atomic_species(config["pseudo"], config["weight"])),
             ("cell_parameters", _cell_parameters(axes)),
             ("atomic_positions",  _atomic_positions(latpos)),
@@ -133,11 +133,15 @@ def _atom_types(ase_system):
     num_atom_types = len(atom_types)
     return num_atoms, num_atom_types
 
-def _electrons(conv_thr):
+def _electrons(calc_type, conv_thr):
     nl = [" &electrons"]
     nl.append("    startingwfc='atomic+random',")
     nl.append("    diagonalization='david',")
-    nl.append("    conv_thr={}".format(str(conv_thr)))
+    if calc_type == 'scf':
+        nl.append("    conv_thr={}".format(str(conv_thr)))
+    else:
+        nl.append("    diago_thr_init={}".format(str(conv_thr)))
+
     nl.append(" /")
     return "\n".join(nl)
 
