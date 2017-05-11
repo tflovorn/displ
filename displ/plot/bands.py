@@ -7,6 +7,25 @@ from displ.pwscf.parseScf import fermi_from_scf, alat_from_scf, latVecs_from_scf
 from displ.wannier.extractHr import extractHr
 from displ.wannier.plotBands import plotBands
 
+def make_comp_groups(orbitals_per_X, orbitals_per_M, num_layers):
+    # Assume orbital basis is arranged such that all X's come before all M's,
+    # and X's and M's are individually sorted by z position.
+    Xs_per_layer = orbitals_per_X * 2
+    Ms_per_layer = orbitals_per_M
+
+
+    groups = []
+    for layer in range(num_layers):
+        X_base = layer*Xs_per_layer
+        layer_orbitals = list(range(X_base, X_base + Xs_per_layer))
+
+        M_base = num_layers*Xs_per_layer + layer*Ms_per_layer
+        layer_orbitals.extend(list(range(M_base, M_base + Ms_per_layer)))
+
+        groups.append(layer_orbitals)
+
+    return groups
+
 def _main():
     parser = argparse.ArgumentParser("Plot band structure",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -24,6 +43,12 @@ def _main():
             help="Maximum energy to plot")
     parser.add_argument("--plot_evecs", action='store_true',
             help="Plot eigenvector decomposition")
+    parser.add_argument("--num_layers", type=int, default=3,
+            help="Number of layers (required if group_layer_* options given)")
+    parser.add_argument("--group_layer_evecs_soc", action='store_true',
+            help="Group eigenvectors weights by layer, assuming SOC")
+    parser.add_argument("--group_layer_evecs_no_soc", action='store_true',
+            help="Group eigenvectors weights by layer, assuming no SOC")
     parser.add_argument("--show", action='store_true',
             help="Show band plot instead of outputting file")
     args = parser.parse_args()
@@ -58,8 +83,16 @@ def _main():
     num_bands, num_ks, qe_bands = extractQEBands(bands_path)
     outpath = args.prefix
 
-    # TODO?
-    comp_groups = None
+    if args.group_layer_evecs_soc:
+        orbitals_per_X = 6
+        orbitals_per_M = 10
+        comp_groups = make_comp_groups(orbitals_per_X, orbitals_per_M, args.num_layers)
+    elif args.group_layer_evecs_no_soc:
+        orbitals_per_X = 3
+        orbitals_per_M = 5
+        comp_groups = make_comp_groups(orbitals_per_X, orbitals_per_M, args.num_layers)
+    else:
+        comp_groups = None
 
     plotBands(qe_bands, Hr, alat, latVecs, minE_plot, maxE_plot, outpath, show=args.show,
             symList=band_path_labels(), fermi_energy=E_F, plot_evecs=args.plot_evecs,
