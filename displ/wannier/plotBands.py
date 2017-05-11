@@ -132,12 +132,12 @@ def plotBands(evalsDFT, Hr, alat, latVecs, minE, maxE, outpath, show=False, symL
 
         for comp_group_index, comp_group in enumerate(used_comp_groups):
             plt_xs, plt_ys, plt_cs = [], [], []
-            for x in Hr_xs:
-                ys = Hr_ys[x]
+            for ix, x in enumerate(Hr_xs):
+                ys = Hr_ys[ix]
                 for eval_index, y in enumerate(ys):
                     comp_group_total = 0.0
                     for comp in comp_group:
-                        comp_val = abs(Hr_evecs[x][comp, eval_index])**2
+                        comp_val = abs(Hr_evecs[ix][comp, eval_index])**2
                         comp_group_total += comp_val
 
                     plt_xs.append(x)
