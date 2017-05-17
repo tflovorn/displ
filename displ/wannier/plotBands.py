@@ -77,13 +77,21 @@ def plotBands(evalsDFT, Hr, alat, latVecs, minE, maxE, outpath, show=False, symL
         DFT_sym_k_indices = [i*nk_per_sym for i in range(len(symList))]
         # ks in DFT_ks and Hr_ks are in Cartesian basis in units of 2pi/alat.
         # _recip_dist and _scaled_k_xs expect reciprocal lattice basis.
+        # k_Cart = R^T * k_Recip
+        # --> k_Cart^T = k_Recip^T * R
+        # --> k_Recip^T = k_Cart^T * R^{-1}
+
         Rinv = np.linalg.inv(R)
-        DFT_ks_Recip = [np.dot(Rinv, (2*np.pi/alat)*np.array(k)) for k in DFT_ks]
+        DFT_ks_Recip = [np.dot((2*np.pi/alat)*np.array(k), Rinv) for k in DFT_ks]
+
         DFT_recip_dists = _recip_dist(DFT_sym_k_indices, DFT_ks_Recip, R)
         DFT_xs = _scaled_k_xs(DFT_sym_k_indices, DFT_ks_Recip, DFT_recip_dists)
+
         if Hr is not None:
             sym_k_indices = [i*nk_per_sym*Hr_ks_per_DFT_k for i in range(len(symList))]
-            Hr_ks_Recip = [np.dot(Rinv, (2*np.pi/alat)*np.array(k)) for k in Hr_ks]
+
+            Hr_ks_Recip = [np.dot((2*np.pi/alat)*np.array(k), Rinv) for k in Hr_ks]
+
             recip_dists = _recip_dist(sym_k_indices, Hr_ks_Recip, R)
             Hr_xs = _scaled_k_xs(sym_k_indices, Hr_ks_Recip, recip_dists)
             sym_xs = [Hr_xs[sym_k_indices[i]] for i in range(len(symList))]
@@ -229,6 +237,7 @@ def _recip_dist(sym_indices, ks_cut, R):
         prev_k = ks_cut[prev_k_index]
         # Convert k and prev_k from reciprocal lattice coordinates to
         # Cartesian coordinates.
+        # k_Cart^T = k_Recip^T * R
         # Note that k and prev_k here are row vectors (i.e. 1x3 'dual vectors',
         # the transpose of 3x1 column 'vectors').
         k_Cart = np.dot(k, R)
