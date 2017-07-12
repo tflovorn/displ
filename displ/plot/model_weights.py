@@ -52,6 +52,7 @@ def _main():
     Hr = extractHr(Hr_path)
 
     K = np.array([1/3, 1/3, 0.0])
+    #K = -np.array([1/3, 1/3, 0.0])
 
     reduction_factor = 0.7
     num_ks = 100
@@ -67,34 +68,58 @@ def _main():
     orbitals_per_M = 10
 
     # Base index for orbitals of each layer:
-    base_orbitals = [args.num_layers * orbitals_per_X + z * orbitals_per_M for z in range(args.num_layers)]
+    base_orbitals = [args.num_layers * 2 * orbitals_per_X + z * orbitals_per_M for z in range(args.num_layers)]
 
     # Orbitals contributing to j = +5/2 state:
     x2y2_up = [base + 6 for base in base_orbitals]
     xy_up = [base + 8 for base in base_orbitals]
+    x2y2_dn = [base + 7 for base in base_orbitals]
+    xy_dn = [base + 9 for base in base_orbitals]
+    print(x2y2_up)
+    print(xy_up)
+    print(x2y2_dn)
+    print(xy_dn)
 
+    num_top_bands = args.num_layers
     weights = []
-    for z in range(args.num_layers):
+    for i in range(num_top_bands):
         weights.append([])
 
     for k in ks:
         Hk = Hk_recip(k, Hr)
         Es, U = np.linalg.eigh(Hk)
 
-        top = top_valence_indices(E_F, args.num_layers, Es)
+        top = top_valence_indices(E_F, num_top_bands, Es)
+        #print(top)
+        #print([Es[band] for band in top])
+        #print(E_F)
 
-        for z, (n1, n2) in enumerate(zip(x2y2_up, xy_up)):
+        for i, band in enumerate(top):
+            #print("band {}".format(i))
+            #for n, v in enumerate(U[:, band]):
+            #    if abs(v)**2 > 1e-2:
+            #        print(n, abs(v)**2, v)
+
             total = 0
 
-            for i in top:
-                evec_comp = (1/np.sqrt(2)) * (U[n1, i] - 1j*U[n2, i])
+            for z, (n1_up, n2_up, n1_dn, n2_dn) in enumerate(zip(x2y2_up, xy_up, x2y2_dn, xy_dn)):
+                # Appropriate arrangement for K.
+                # TODO - swap for -K.
+                if z % 2 == 0:
+                    evec_comp = (1/np.sqrt(2)) * (U[n1_dn, band] + 1j*U[n2_dn, band])
+                else:
+                    evec_comp = (1/np.sqrt(2)) * (U[n1_up, band] - 1j*U[n2_up, band])
+
+                print(i, z, abs(evec_comp)**2)
                 total += abs(evec_comp)**2
 
-            weights[z].append(1 - total)
+            weights[i].append(1 - total)
 
-    for z, layer_weights in enumerate(weights):
-        plt.plot(xs, layer_weights, 'k-', label="Layer {}".format(z))
+    for i, band_weights in enumerate(weights):
+        #print(band_weights)
+        plt.plot(xs, band_weights, label="Band {}".format(i))
 
+    plt.legend(loc=0)
     plt.show()
 
 if __name__ == "__main__":
