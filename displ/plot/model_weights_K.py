@@ -52,7 +52,6 @@ def _main():
     Hr = extractHr(Hr_path)
 
     K = np.array([1/3, 1/3, 0.0])
-    #K = -np.array([1/3, 1/3, 0.0])
 
     reduction_factor = 0.7
     num_ks = 100
@@ -75,10 +74,6 @@ def _main():
     xy_up = [base + 8 for base in base_orbitals]
     x2y2_dn = [base + 7 for base in base_orbitals]
     xy_dn = [base + 9 for base in base_orbitals]
-    print(x2y2_up)
-    print(xy_up)
-    print(x2y2_dn)
-    print(xy_dn)
 
     num_top_bands = args.num_layers
     weights = []
@@ -90,37 +85,30 @@ def _main():
         Es, U = np.linalg.eigh(Hk)
 
         top = top_valence_indices(E_F, num_top_bands, Es)
-        #print(top)
-        #print([Es[band] for band in top])
-        #print(E_F)
 
         for i, band in enumerate(top):
-            #print("band {}".format(i))
-            #for n, v in enumerate(U[:, band]):
-            #    if abs(v)**2 > 1e-2:
-            #        print(n, abs(v)**2, v)
-
             total = 0
 
             for z, (n1_up, n2_up, n1_dn, n2_dn) in enumerate(zip(x2y2_up, xy_up, x2y2_dn, xy_dn)):
                 # Appropriate arrangement for K.
                 # TODO - swap for -K.
+                # U[n, i] = <n|i> --> <i|n> = U[n, i].conjugate()
                 if z % 2 == 0:
-                    evec_comp = (1/np.sqrt(2)) * (U[n1_dn, band] + 1j*U[n2_dn, band])
+                    evec_comp = (1/np.sqrt(2)) * (U[n1_dn, band].conjugate() - 1j*U[n2_dn, band].conjugate())
                 else:
-                    evec_comp = (1/np.sqrt(2)) * (U[n1_up, band] - 1j*U[n2_up, band])
+                    evec_comp = (1/np.sqrt(2)) * (U[n1_up, band].conjugate() + 1j*U[n2_up, band].conjugate())
 
-                print(i, z, abs(evec_comp)**2)
                 total += abs(evec_comp)**2
 
             weights[i].append(1 - total)
 
     for i, band_weights in enumerate(weights):
-        #print(band_weights)
         plt.plot(xs, band_weights, label="Band {}".format(i))
 
     plt.legend(loc=0)
-    plt.show()
+    plt.xlabel("k / K", fontsize='large')
+    plt.ylabel("Weight outside l_z = +/- 2, up/down group")
+    plt.savefig("model_weights_K.png", bbox_inches='tight', dpi=500)
 
 if __name__ == "__main__":
     _main()
