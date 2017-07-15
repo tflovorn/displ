@@ -10,6 +10,40 @@ from displ.wannier.extractHr import extractHr
 from displ.wannier.bands import Hk_recip
 from displ.plot.model_weights_K import vec_linspace, top_valence_indices
 
+def density_matrix(states, probabilities):
+    eps_abs, eps_rel = 1e-16, 1e-16
+    assert_near_equal(sum(probabilities), 1.0, eps_abs, eps_rel)
+
+    dimension = states[0].shape[0] # assume states are row vectors
+    dm = np.zeros([dimension, dimension], dtype=np.complex128)
+    for v, p in zip(states, probabilities):
+        for ip in range(dimension):
+            for i in range(dimension):
+                # dm = \sum_v p_v |v> <v|
+                # --> <ip|dm|i> = \sum_v p_v <ip|v> <v|i> = \sum_v p_v v_ip v_i^*
+                dm[ip, i] += p * v[ip, 0] * v[i, 0].conjugate()
+
+    assert_diagonal_real(dm, eps_abs)
+    assert_near_equal(np.trace(dm), 1.0, eps_abs, eps_rel)
+
+    return dm
+
+def assert_diagonal_real(M, eps_abs):
+    assert(M.shape[0] == M.shape[1])
+    dimension = M.shape[0]
+    for ip in range(dimension):
+        for i in range(dimension):
+            assert_near_zero(M[ip, i].imag, eps_abs)
+
+def assert_near_zero(x, eps_abs):
+    return abs(x) < eps_abs
+
+def assert_near_equal(x, y, eps_abs, eps_rel):
+    if abs(x - y) < eps_abs:
+        return True
+    else:
+        return abs(x - y) < eps_rel * max(abs(x), abs(y))
+
 def _main():
     parser = argparse.ArgumentParser("Plot band structure",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -56,7 +90,7 @@ def _main():
 
     # For each layer, make a projection onto all orbitals in that layer.
     Pzs = []
-    for z, z_basis_elements in enumerate(layer_orbitals):
+    for z_basis_elements in layer_orbitals:
         print(z_basis_elements)
         Pz = np.zeros([total_orbitals, total_orbitals], dtype=np.complex128)
         
@@ -64,6 +98,10 @@ def _main():
             Pz[i, i] = 1
 
         Pzs.append(Pz)
+
+    # Consider only orthogonal projections: projection matrices should be Hermitian.
+    for Pz in Pzs:
+        assert((Pz == Pz.T.conjugate()).all())
 
     num_top_bands = args.num_layers
 
@@ -82,22 +120,26 @@ def _main():
 
             for restricted_index_n, band_n in enumerate(top):
                 state_n = U[:, [band_n]]
-                dm_n = np.outer(state_n, state_n.T)
-                proj_dms.append(np.dot(Pz, np.dot(dm_n, Pz)))
+                dm_n = density_matrix([state_n], [1])
+
+                proj_dm = np.dot(Pz, np.dot(dm_n, Pz))
+                proj_dms.append(proj_dm)
 
             proj_overlap = np.zeros([num_top_bands, num_top_bands], dtype=np.complex128)
 
-            for restricted_index_n in range(len(top)):
-                for restricted_index_np in range(len(top)):
-                    dm_n, dm_np = proj_dms[restricted_index_n], proj_dms[restricted_index_np]
-                    dm_n_norm = dm_n / np.trace(dm_n)
+            for restricted_index_np in range(len(top)):
+                for restricted_index_n in range(len(top)):
+                    dm_np, dm_n = proj_dms[restricted_index_np], proj_dms[restricted_index_n]
                     dm_np_norm = dm_np / np.trace(dm_np)
+                    dm_n_norm = dm_n / np.trace(dm_n)
+
+                    print("np, n, Tr rho_np^z, Tr rho_n^z", restricted_index_np, restricted_index_n, np.trace(dm_np), np.trace(dm_n), np.trace(dm_np_norm), np.trace(dm_n_norm))
 
                     threshold = 1e-4
-                    if np.trace(dm_n) < threshold or np.trace(dm_np) < threshold:
-                        proj_overlap[restricted_index_n, restricted_index_np] = 1
+                    if np.trace(dm_np) < threshold or np.trace(dm_n) < threshold:
+                        proj_overlap[restricted_index_np, restricted_index_n] = 1
                     else:
-                        proj_overlap[restricted_index_n, restricted_index_np] = np.trace(np.dot(dm_n_norm, dm_np_norm))
+                        proj_overlap[restricted_index_np, restricted_index_n] = np.trace(np.dot(dm_np_norm, dm_n_norm))
 
             print("z = {}".format(z))
             print("overlap = ")
