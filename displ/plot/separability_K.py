@@ -43,7 +43,30 @@ def near_equal(x, y, eps_abs, eps_rel):
     else:
         return abs(x - y) < eps_rel * max(abs(x), abs(y))
 
+def Pauli_matrices():
+    sigma_x = np.array([[0, 1],
+                        [1, 0]], dtype=np.complex128)
+    sigma_y = np.array([[0, -1j],
+                        [1j, 0]], dtype=np.complex128)
+    sigma_z = np.array([[1, 0],
+                        [0, -1]], dtype=np.complex128)
+
+    return sigma_x, sigma_y, sigma_z
+
+def Pauli_over_full_basis(total_orbitals):
+    result = []
+    for sigma in Pauli_matrices():
+        result.append(np.kron(np.eye(total_orbitals // 2), sigma))
+        
+    return result
+
+def expectation_normalized(dm, operators):
+    dm_norm = dm / np.trace(dm)
+    return [np.trace(np.dot(dm_norm, O)) for O in operators]
+
 def _main():
+    np.set_printoptions(threshold=np.inf)
+
     parser = argparse.ArgumentParser("Plot band structure",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("prefix", type=str,
@@ -86,6 +109,19 @@ def _main():
     layer_orbitals = [list(itertools.chain(range(z * 2 * orbitals_per_X, (z + 1) * 2 * orbitals_per_X),
             range(M_base + z * orbitals_per_M, M_base + (z + 1) * orbitals_per_M)))
             for z in range(args.num_layers)]
+    # M only
+    #layer_orbitals = [range(M_base + z * orbitals_per_M, M_base + (z + 1) * orbitals_per_M)
+    #        for z in range(args.num_layers)]
+    # Up only
+    #layer_orbitals_up = [list(itertools.chain(range(z * 2 * orbitals_per_X, (z + 1) * 2 * orbitals_per_X, 2),
+    #        range(M_base + z * orbitals_per_M, M_base + (z + 1) * orbitals_per_M, 2)))
+    #        for z in range(args.num_layers)]
+    # Down only
+    #layer_orbitals_dn = [list(itertools.chain(range(z * 2 * orbitals_per_X + 1, (z + 1) * 2 * orbitals_per_X, 2),
+    #        range(M_base + z * orbitals_per_M + 1, M_base + (z + 1) * orbitals_per_M, 2)))
+    #        for z in range(args.num_layers)]
+
+    #layer_orbitals = [layer_orbitals_dn[0], layer_orbitals_up[1], layer_orbitals_dn[2]]
 
     # For each layer, make a projection onto all orbitals in that layer.
     Pzs = []
@@ -102,11 +138,16 @@ def _main():
     for Pz in Pzs:
         assert((Pz == Pz.T.conjugate()).all())
 
+    spin_operators = Pauli_over_full_basis(total_orbitals)
+    print(spin_operators)
+
     num_top_bands = args.num_layers
 
-    deviations = []
+    deviations, proj_overlaps, spins = [], [], []
     for z in range(len(Pzs)):
         deviations.append([])
+        proj_overlaps.append([])
+        spins.append([])
 
     for k in ks:
         print("k = {}".format(k))
@@ -115,14 +156,25 @@ def _main():
             Es, U = np.linalg.eigh(Hk)
 
             top = top_valence_indices(E_F, num_top_bands, Es)
+            print("top orbitals = ", top, "energies = ", [Es[t] for t in top])
+
             proj_dms = [] # "dm" == density matrix
+            kz_spins = []
 
             for restricted_index_n, band_n in enumerate(top):
                 state_n = U[:, [band_n]]
+                print("orbital", band_n)
+                for i, v in enumerate(state_n[:, 0]):
+                    print(i, v)
+
                 dm_n = density_matrix([state_n], [1])
 
                 proj_dm = np.dot(Pz, np.dot(dm_n, Pz))
                 proj_dms.append(proj_dm)
+
+                kz_spins.append(expectation_normalized(proj_dm, spin_operators))
+
+            spins[z].append(kz_spins)
 
             proj_overlap = np.zeros([num_top_bands, num_top_bands], dtype=np.complex128)
 
@@ -132,7 +184,7 @@ def _main():
                     dm_np_norm = dm_np / np.trace(dm_np)
                     dm_n_norm = dm_n / np.trace(dm_n)
 
-                    print("np, n, Tr rho_np^z, Tr rho_n^z", restricted_index_np, restricted_index_n, np.trace(dm_np), np.trace(dm_n), np.trace(dm_np_norm), np.trace(dm_n_norm))
+                    print("np, n, Tr rho_np^z, Tr rho_n^z, Tr rho_np^z rho_n^z", restricted_index_np, restricted_index_n, np.trace(dm_np), np.trace(dm_n), np.trace(np.dot(dm_np, dm_n)))
 
                     threshold = 1e-4
                     if np.trace(dm_np) < threshold or np.trace(dm_n) < threshold:
@@ -144,18 +196,55 @@ def _main():
             print("overlap = ")
             print(proj_overlap)
 
+            # proj_overlap should be real.
+            eps_abs = 1e-12
+            assert(all([x.imag < eps_abs for x in np.nditer(proj_overlap)]))
+
             # Compute deviation from desired 'all ones' value of proj_overlap.
-            deviation = sum([abs(1 - v) for v in np.nditer(proj_overlap)])
+            deviation = sum([abs(1 - x) for x in np.nditer(proj_overlap)])
 
             print("sum of abs(deviation) = {}".format(deviation))
 
+            proj_overlaps[z].append(proj_overlap)
             deviations[z].append(deviation)
 
     for z in range(len(Pzs)):
         plt.plot(xs, deviations[z], label="deviations for layer {}".format(z))
 
     plt.legend(loc=0)
-    plt.savefig("{}_separability_K.png".format(args.prefix), bbox_inches='tight', dpi=500)
+    plt.savefig("{}_deviation_separability_K.png".format(args.prefix), bbox_inches='tight', dpi=500)
+    plt.clf()
+
+    for z in range(len(Pzs)):
+        for ip, i in [(0, 1), (1, 2), (0, 2)]:
+            ys = [v[ip, i].real for v in proj_overlaps[z]]
+            plt.plot(xs, ys, label="({}, {}) overlap".format(ip, i))
+
+        plt.legend(loc=0)
+        plt.savefig("{}_overlap_z_{}_separability_K.png".format(args.prefix, z), bbox_inches='tight', dpi=500)
+        plt.clf()
+
+    for z in range(len(Pzs)):
+        colors = ['k', 'g', 'b']
+        styles = ['-', '--', '.']
+
+        for band_n, style in zip([0, 1, 2], styles):
+            for (spin_index, spin_dir), color in zip(enumerate(['x', 'y', 'z']), colors):
+                ys = [spins[z][k][band_n][spin_index].real for k in range(num_ks)]
+                plt.plot(xs, ys, '{}{}'.format(color, style), label="Band {} spin {}".format(band_n, spin_dir))
+
+        plt.legend(loc=0)
+        plt.savefig("{}_z_{}_spin_real.png".format(args.prefix, z), bbox_inches='tight', dpi=500)
+        plt.clf()
+
+        for band_n, style in zip([0, 1, 2], styles):
+            for (spin_index, spin_dir), color in zip(enumerate(['x', 'y', 'z']), colors):
+                ys = [spins[z][k][band_n][spin_index].imag for k in range(num_ks)]
+                plt.plot(xs, ys, '{}{}'.format(color, style), label="Band {} spin {}".format(band_n, spin_dir))
+
+        plt.legend(loc=0)
+        plt.savefig("{}_z_{}_spin_imag.png".format(args.prefix, z), bbox_inches='tight', dpi=500)
+        plt.clf()
 
 if __name__ == "__main__":
     _main()
