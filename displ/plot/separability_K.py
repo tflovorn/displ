@@ -144,10 +144,12 @@ def _main():
     num_top_bands = args.num_layers
 
     deviations, proj_overlaps, spins = [], [], []
+    spins_non_layer_renormalized = []
     for z in range(len(Pzs)):
         deviations.append([])
         proj_overlaps.append([])
         spins.append([])
+        spins_non_layer_renormalized.append([])
 
     for k in ks:
         print("k = {}".format(k))
@@ -160,6 +162,7 @@ def _main():
 
             proj_dms = [] # "dm" == density matrix
             kz_spins = []
+            kz_spins_non_layer_renormalized = []
 
             for restricted_index_n, band_n in enumerate(top):
                 state_n = U[:, [band_n]]
@@ -173,8 +176,10 @@ def _main():
                 proj_dms.append(proj_dm)
 
                 kz_spins.append(expectation_normalized(proj_dm, spin_operators))
+                kz_spins_non_layer_renormalized.append([np.trace(np.dot(proj_dm, sigma)) for sigma in spin_operators])
 
             spins[z].append(kz_spins)
+            spins_non_layer_renormalized[z].append(kz_spins_non_layer_renormalized)
 
             proj_overlap = np.zeros([num_top_bands, num_top_bands], dtype=np.complex128)
 
@@ -204,6 +209,7 @@ def _main():
             proj_overlaps[z].append(proj_overlap)
             deviations[z].append(deviation)
 
+    # Plot deviation from 1-band-per-layer representability.
     for z in range(len(Pzs)):
         plt.plot(xs, deviations[z], label="deviations for layer {}".format(z))
 
@@ -211,6 +217,7 @@ def _main():
     plt.savefig("{}_deviation_separability_K.png".format(args.prefix), bbox_inches='tight', dpi=500)
     plt.clf()
 
+    # Plot layer-projected band overlaps.
     for z in range(len(Pzs)):
         for ip, i in [(0, 1), (1, 2), (0, 2)]:
             ys = [v[ip, i].real for v in proj_overlaps[z]]
@@ -220,6 +227,7 @@ def _main():
         plt.savefig("{}_overlap_z_{}_separability_K.png".format(args.prefix, z), bbox_inches='tight', dpi=500)
         plt.clf()
 
+    # Plot layer-projected spin expectation values.
     for z in range(len(Pzs)):
         colors = ['k', 'g', 'b']
         styles = ['-', '--', '.']
@@ -241,6 +249,22 @@ def _main():
         plt.legend(loc=0)
         plt.savefig("{}_z_{}_spin_imag.png".format(args.prefix, z), bbox_inches='tight', dpi=500)
         plt.clf()
+
+    # Plot sum of spin expectation values over layers.
+    colors = ['k', 'g', 'b']
+    styles = ['-', '--', '.']
+    for (spin_index, spin_dir), color in zip(enumerate(['x', 'y', 'z']), colors):
+        for band_n, style in zip([0, 1, 2], styles):
+            ys = np.zeros([num_ks], dtype=np.float64)
+
+            for z in range(len(Pzs)):
+                ys += np.array([spins_non_layer_renormalized[z][k][band_n][spin_index].real for k in range(num_ks)])
+
+            plt.plot(xs, ys, '{}{}'.format(color, style), label="Band {} spin {}".format(band_n, spin_dir))
+
+    plt.legend(loc=0)
+    plt.savefig("{}_z_total_spin_real.png".format(args.prefix), bbox_inches='tight', dpi=500)
+    plt.clf()
 
 if __name__ == "__main__":
     _main()
