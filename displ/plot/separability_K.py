@@ -186,11 +186,7 @@ def _main():
 
                     print("np, n, Tr rho_np^z, Tr rho_n^z, Tr rho_np^z rho_n^z", restricted_index_np, restricted_index_n, np.trace(dm_np), np.trace(dm_n), np.trace(np.dot(dm_np, dm_n)))
 
-                    threshold = 1e-4
-                    if np.trace(dm_np) < threshold or np.trace(dm_n) < threshold:
-                        proj_overlap[restricted_index_np, restricted_index_n] = 1
-                    else:
-                        proj_overlap[restricted_index_np, restricted_index_n] = np.trace(np.dot(dm_np_norm, dm_n_norm))
+                    proj_overlap[restricted_index_np, restricted_index_n] = np.trace(np.dot(dm_np_norm, dm_n_norm))
 
             print("z = {}".format(z))
             print("overlap = ")
