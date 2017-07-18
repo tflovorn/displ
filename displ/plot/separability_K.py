@@ -64,6 +64,54 @@ def expectation_normalized(dm, operators):
     dm_norm = dm / np.trace(dm)
     return [np.trace(np.dot(dm_norm, O)) for O in operators]
 
+def get_orbital_numbers():
+    '''Assume SOC present and that model has 2*3 X(p) orbitals per layer and
+    2*5 M(d) in canonical Wannier90 order.  Assumes atoms are ordered with all
+    Xs first, then all Ms, and within M/X groups the atoms are in layer order.
+    '''
+    orbitals_per_X = 6
+    orbitals_per_M = 10
+
+    return orbitals_per_X, orbitals_per_M
+
+def get_total_orbitals(num_layers):
+    orbitals_per_X, orbitals_per_M = get_orbital_numbers()
+    total_orbitals = num_layers * 2 * orbitals_per_X + num_layers * orbitals_per_M
+
+    return total_orbitals
+
+def get_layer_orbitals(num_layers):
+    orbitals_per_X, orbitals_per_M = get_orbital_numbers()
+
+    M_base = num_layers * 2 * orbitals_per_X
+
+    layer_orbitals = [list(itertools.chain(range(z * 2 * orbitals_per_X, (z + 1) * 2 * orbitals_per_X),
+            range(M_base + z * orbitals_per_M, M_base + (z + 1) * orbitals_per_M)))
+            for z in range(num_layers)]
+
+    return layer_orbitals
+
+def layer_projections(num_layers):
+    layer_orbitals = get_layer_orbitals(num_layers)
+    total_orbitals = get_total_orbitals(num_layers)
+
+    # For each layer, make a projection onto all orbitals in that layer.
+    Pzs = []
+    for z_basis_elements in layer_orbitals:
+        print(z_basis_elements)
+        Pz = np.zeros([total_orbitals, total_orbitals], dtype=np.complex128)
+        
+        for i in z_basis_elements:
+            Pz[i, i] = 1
+
+        Pzs.append(Pz)
+
+    # Consider only orthogonal projections: projection matrices should be Hermitian.
+    for Pz in Pzs:
+        assert((Pz == Pz.T.conjugate()).all())
+
+    return Pzs
+
 def _main():
     np.set_printoptions(threshold=np.inf)
 
@@ -74,7 +122,7 @@ def _main():
     parser.add_argument("--subdir", type=str, default=None,
             help="Subdirectory under work_base where calculation was run")
     parser.add_argument("--num_layers", type=int, default=3,
-            help="Number of layers (required if group_layer_* options given)")
+            help="Number of layers")
     args = parser.parse_args()
 
     work = _get_work(args.subdir, args.prefix)
@@ -94,51 +142,11 @@ def _main():
     ks = vec_linspace(K, reduction_factor*K, num_ks)
     xs = np.linspace(1, reduction_factor, num_ks)
 
-    # Assume SOC present and that model has 2*3 X(p) orbitals per layer
-    # and 2*5 M(d) in canonical Wannier90 order.
-    # Assumes atoms are ordered with all Xs first, then all Ms, and within
-    # M/X groups the atoms are in layer order.
-    orbitals_per_X = 6
-    orbitals_per_M = 10
+    assert(Hr[(0, 0, 0)][0].shape[0] == get_total_orbitals(args.num_layers))
 
-    total_orbitals = args.num_layers * 2 * orbitals_per_X + args.num_layers * orbitals_per_M
-    assert(Hr[(0, 0, 0)][0].shape[0] == total_orbitals)
+    Pzs = layer_projections(args.num_layers)
 
-    M_base = args.num_layers * 2 * orbitals_per_X
-
-    layer_orbitals = [list(itertools.chain(range(z * 2 * orbitals_per_X, (z + 1) * 2 * orbitals_per_X),
-            range(M_base + z * orbitals_per_M, M_base + (z + 1) * orbitals_per_M)))
-            for z in range(args.num_layers)]
-    # M only
-    #layer_orbitals = [range(M_base + z * orbitals_per_M, M_base + (z + 1) * orbitals_per_M)
-    #        for z in range(args.num_layers)]
-    # Up only
-    #layer_orbitals_up = [list(itertools.chain(range(z * 2 * orbitals_per_X, (z + 1) * 2 * orbitals_per_X, 2),
-    #        range(M_base + z * orbitals_per_M, M_base + (z + 1) * orbitals_per_M, 2)))
-    #        for z in range(args.num_layers)]
-    # Down only
-    #layer_orbitals_dn = [list(itertools.chain(range(z * 2 * orbitals_per_X + 1, (z + 1) * 2 * orbitals_per_X, 2),
-    #        range(M_base + z * orbitals_per_M + 1, M_base + (z + 1) * orbitals_per_M, 2)))
-    #        for z in range(args.num_layers)]
-
-    #layer_orbitals = [layer_orbitals_dn[0], layer_orbitals_up[1], layer_orbitals_dn[2]]
-
-    # For each layer, make a projection onto all orbitals in that layer.
-    Pzs = []
-    for z_basis_elements in layer_orbitals:
-        print(z_basis_elements)
-        Pz = np.zeros([total_orbitals, total_orbitals], dtype=np.complex128)
-        
-        for i in z_basis_elements:
-            Pz[i, i] = 1
-
-        Pzs.append(Pz)
-
-    # Consider only orthogonal projections: projection matrices should be Hermitian.
-    for Pz in Pzs:
-        assert((Pz == Pz.T.conjugate()).all())
-
-    spin_operators = Pauli_over_full_basis(total_orbitals)
+    spin_operators = Pauli_over_full_basis(get_total_orbitals(args.num_layers))
     print(spin_operators)
 
     num_top_bands = args.num_layers
