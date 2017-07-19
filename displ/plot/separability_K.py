@@ -91,14 +91,13 @@ def get_layer_orbitals(num_layers):
 
     return layer_orbitals
 
-def layer_projections(num_layers):
+def get_layer_projections(num_layers):
     layer_orbitals = get_layer_orbitals(num_layers)
     total_orbitals = get_total_orbitals(num_layers)
 
     # For each layer, make a projection onto all orbitals in that layer.
     Pzs = []
     for z_basis_elements in layer_orbitals:
-        print(z_basis_elements)
         Pz = np.zeros([total_orbitals, total_orbitals], dtype=np.complex128)
         
         for i in z_basis_elements:
@@ -144,10 +143,9 @@ def _main():
 
     assert(Hr[(0, 0, 0)][0].shape[0] == get_total_orbitals(args.num_layers))
 
-    Pzs = layer_projections(args.num_layers)
+    Pzs = get_layer_projections(args.num_layers)
 
     spin_operators = Pauli_over_full_basis(get_total_orbitals(args.num_layers))
-    print(spin_operators)
 
     num_top_bands = args.num_layers
 

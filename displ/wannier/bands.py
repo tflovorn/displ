@@ -101,7 +101,7 @@ def dHk_dk(k, Hr, latVecs):
                 result.append(matlib.zeros((nb, nb), dtype=np.complex128))
 
         # Add contibution from H_{r} to dH(k)/dk:
-        #   i/weight * (d/dk)(k dot (r_i - r_j)) * exp(i k dot (r_i - r_j)) * H_{ij}
+        #   i/degen * (d/dk)(k dot (r_i - r_j)) * exp(i k dot (r_i - r_j)) * H_{ij}
         weight = 1.0 / float(degen)
         kr = _k_dot_eta(k, [ra, rb, rc], latVecs)
         coeff = 1j * weight * np.exp(1j * kr) * Hr_r
@@ -110,5 +110,51 @@ def dHk_dk(k, Hr, latVecs):
                         + rb * latVecs[1, cartIndex]
                         + rc * latVecs[2, cartIndex])
             result[cartIndex] += coeff * derivdot
+
+    return result
+
+def d2Hk_dk(k, Hr, latVecs):
+    '''Return a list of values giving d^2 H(k)/dk^2, the second derivative of
+    the Hamiltonian H(k) in the Wannier basis as determined from the real-space
+    Hamiltonian Hr, for each combination of Cartesian k directions (dk_x dk_x,
+    dk_x dk_y, dk_x dk_z, dk_y dk_x, ...). The second derivative is evaluated
+    at the input point k, which is a 3-element tuple in the Cartesian basis.
+
+    Hr should have the format returned by extractHr(). The returned value
+    dH(k)/dk is a dictionary with keys (cp, c) where cp = (0, 1, 2) for (x, y,
+    z) (and similarly for c) and values which are numpy matrices of shape (nb,
+    nb) with data type complex128, where nb is the number of bands in the
+    Wannier basis.
+
+    latVecs is defined as in Hk().
+    '''
+    result = None
+    for key, value in Hr.items():
+        Hr_r = value[0]
+        degen = value[1]
+        ra, rb, rc = key[0], key[1], key[2]
+        # Initialize result matrix if necessary.
+        if result is None:
+            nb = Hr_r.shape[0]
+            result = {}
+            for cp in range(3):
+                for c in range(3):
+                    result[(cp, c)] = matlib.zeros((nb, nb), dtype=np.complex128)
+
+        # Add contibution from H_{r} to d2H(k)/dk2:
+        #   1/degen * (d2/dk2)(exp(i k dot (r_i - r_j))) * H_{ij}
+        weight = 1.0 / float(degen)
+        kr = _k_dot_eta(k, [ra, rb, rc], latVecs)
+        coeff = -weight * np.exp(1j * kr) * Hr_r
+        for cp in range(3):
+            eta_cp = (ra * latVecs[0, cp]
+                    + rb * latVecs[1, cp]
+                    + rc * latVecs[2, cp])
+            for c in range(3):
+                eta_c = (ra * latVecs[0, c]
+                       + rb * latVecs[1, c]
+                       + rc * latVecs[2, c])
+
+                result[(cp, c)] += coeff * eta_cp * eta_c
 
     return result
