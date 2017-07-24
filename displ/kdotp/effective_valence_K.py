@@ -8,8 +8,17 @@ from displ.build.build import _get_work, band_path_labels
 from displ.pwscf.parseScf import fermi_from_scf, latVecs_from_scf
 from displ.wannier.extractHr import extractHr
 from displ.wannier.bands import Hk, dHk_dk, d2Hk_dk
+from displ.kdotp.linalg import nullspace
 from displ.kdotp.model_weights_K import vec_linspace, top_valence_indices
 from displ.kdotp.separability_K import get_layer_projections
+
+def array_with_rows(xs):
+    A = np.zeros([len(xs), len(xs[0])], dtype=np.complex128)
+
+    for i, x in enumerate(xs):
+        A[i, :] = x.T
+
+    return A
 
 def layer_Hamiltonian_0th_order(H_TB_k0, layer_basis):
     H_layer_k0 = np.zeros([len(layer_basis), len(layer_basis)], dtype=np.complex128)
@@ -110,6 +119,12 @@ def _main():
         proj_state_normed = proj_state / np.linalg.norm(proj_state)
 
         layer_basis.append(proj_state_normed)
+
+    complement_basis = nullspace(array_with_rows(layer_basis)).T
+    #print("layer_basis, complement_basis", len(layer_basis), len(complement_basis))
+    #print("complement basis = ")
+    #print(complement_basis)
+    assert(len(layer_basis) + len(complement_basis) == 22*args.num_layers)
 
     # Mirror operation:
     # M|m_0> = |m_0>; M|m_2> = -|m_2>; M|m_1> = |m_1> (? depends on M|p_z>).
