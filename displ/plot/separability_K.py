@@ -147,7 +147,7 @@ def _main():
 
     spin_operators = Pauli_over_full_basis(get_total_orbitals(args.num_layers))
 
-    num_top_bands = args.num_layers
+    num_top_bands = 2*args.num_layers
 
     deviations, proj_overlaps, spins = [], [], []
     spins_non_layer_renormalized = []

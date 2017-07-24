@@ -90,14 +90,14 @@ def _main():
     H_TB_K = Hk(K_cart, Hr, latVecs)
     Es, U = np.linalg.eigh(H_TB_K)
 
-    top = top_valence_indices(E_F, args.num_layers, Es)
+    top = top_valence_indices(E_F, 2*args.num_layers, Es)
 
     # Basis states for the effective Hamiltonian:
     # |P_{z = 0} m_0> (m_0 = highest valence state);
     # |P_{z = 1} m_1>
     # |P_{z = 2} m_0>.
     # TODO support arbitrary layer number
-    layer_basis_indices = [(0, 0), (1, 1), (2, 0)]
+    layer_basis_indices = [(0, 0), (0, 4), (1, 1), (1, 5), (2, 0), (2, 4)]
     layer_basis = []
 
     for z, m in layer_basis_indices:
@@ -156,6 +156,7 @@ def _main():
                 second_order.append((1/2) * q[cp] * q[c] * mstar_invs[(cp, c)])
 
         H_layers.append(H_layer_K + sum(first_order) + sum(second_order))
+        #H_layers.append(H_layer_K)
 
     Emks, Umks = [], []
     for band_index in range(len(layer_basis)):
@@ -164,6 +165,8 @@ def _main():
 
     for k_index, Hk_layers in enumerate(H_layers):
         Es, U = np.linalg.eigh(Hk_layers)
+        #print(k_index)
+        #print("U", U)
 
         for band_index in range(len(layer_basis)):
             Emks[band_index].append(Es)

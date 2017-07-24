@@ -146,7 +146,7 @@ def _main():
     x2y2_dn = [base + 7 for base in base_orbitals]
     xy_dn = [base + 9 for base in base_orbitals]
 
-    num_top_bands = args.num_layers
+    num_top_bands = 2*args.num_layers
     weights = []
     for i in range(num_top_bands):
         weights.append([])
