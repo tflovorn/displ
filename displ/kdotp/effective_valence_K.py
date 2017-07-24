@@ -8,8 +8,8 @@ from displ.build.build import _get_work, band_path_labels
 from displ.pwscf.parseScf import fermi_from_scf, latVecs_from_scf
 from displ.wannier.extractHr import extractHr
 from displ.wannier.bands import Hk, dHk_dk, d2Hk_dk
-from displ.plot.model_weights_K import vec_linspace, top_valence_indices
-from displ.plot.separability_K import get_layer_projections
+from displ.kdotp.model_weights_K import vec_linspace, top_valence_indices
+from displ.kdotp.separability_K import get_layer_projections
 
 def layer_Hamiltonian_0th_order(H_TB_k0, layer_basis):
     H_layer_k0 = np.zeros([len(layer_basis), len(layer_basis)], dtype=np.complex128)

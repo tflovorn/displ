@@ -8,7 +8,7 @@ from displ.build.build import _get_work, band_path_labels
 from displ.pwscf.parseScf import fermi_from_scf
 from displ.wannier.extractHr import extractHr
 from displ.wannier.bands import Hk_recip
-from displ.plot.model_weights_K import vec_linspace, top_valence_indices
+from displ.kdotp.model_weights_K import vec_linspace, top_valence_indices
 
 def density_matrix(states, probabilities):
     eps_abs, eps_rel = 1e-12, 1e-12
