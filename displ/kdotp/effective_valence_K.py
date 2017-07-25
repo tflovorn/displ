@@ -233,6 +233,20 @@ def _main():
     for band_index in range(len(layer_basis)):
         plt.plot(xs, Emks[band_index])
 
+    TB_Emks = []
+    for m in range(len(top)):
+        TB_Emks.append([])
+
+    for k in ks:
+        this_H_TB_k = Hk(k, Hr, latVecs)
+        this_Es, this_U = np.linalg.eigh(this_H_TB_k)
+
+        for m, i in enumerate(top):
+            TB_Emks[m].append(this_Es[i])
+
+    for TB_Em in TB_Emks:
+        plt.plot(xs, TB_Em, 'k.')
+
     plt.show()
 
 if __name__ == "__main__":
