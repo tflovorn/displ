@@ -56,6 +56,36 @@ def layer_Hamiltonian_mstar_inverses(k0_cart, Hr, latVecs, layer_basis):
 
     return mstar_invs
 
+def correction_Hamiltonian_mstar_inverses(k0_cart, Hr, latVecs, E_repr, complement_basis, layer_basis):
+    H_k0 = Hk(k0_cart, Hr, latVecs)
+    dHk_dk_k0 = dHk_dk(k0_cart, Hr, latVecs)
+
+    H_QQ = np.zeros([len(complement_basis), len(complement_basis)], dtype=np.complex128)
+    for zp, zp_state in enumerate([v.conjugate().T for v in complement_basis]):
+        for z, z_state in enumerate(complement_basis):
+            H_QQ[zp, z] = np.dot(zp_state, np.dot(H_k0, z_state))[0, 0]
+
+    derivs_PQ = []
+    for c in range(2):
+        dH_PQ = np.zeros([len(layer_basis), len(complement_basis)], dtype=np.complex128)
+
+        for zp, zp_state in enumerate([v.conjugate().T for v in layer_basis]):
+            for z, z_state in enumerate(complement_basis):
+                dH_PQ[zp, z] = np.dot(zp_state, np.dot(dHk_dk_k0[c], z_state))[0, 0]
+
+        derivs_PQ.append(dH_PQ)
+
+    mstar_invs = {}
+    for cp in range(2):
+        for c in range(2):
+            center = np.linalg.inv(E_repr*np.eye(H_QQ.shape[0]) - H_QQ)
+            Hprime = (np.dot(derivs_PQ[cp], np.dot(center, derivs_PQ[c].conjugate().T))
+                    + np.dot(derivs_PQ[c], np.dot(center, derivs_PQ[cp].conjugate().T)))
+
+            mstar_invs[(cp, c)] = Hprime
+
+    return mstar_invs
+
 def _main():
     np.set_printoptions(threshold=np.inf)
 
@@ -120,11 +150,17 @@ def _main():
 
         layer_basis.append(proj_state_normed)
 
-    complement_basis = nullspace(array_with_rows(layer_basis)).T
-    #print("layer_basis, complement_basis", len(layer_basis), len(complement_basis))
-    #print("complement basis = ")
-    #print(complement_basis)
+    complement_basis_mat = nullspace(array_with_rows(layer_basis).conjugate())
+    complement_basis = []
+    for i in range(complement_basis_mat.shape[1]):
+        v = complement_basis_mat[:, [i]]
+        complement_basis.append(v / np.linalg.norm(v))
+
     assert(len(layer_basis) + len(complement_basis) == 22*args.num_layers)
+
+    for vl in [v.conjugate().T for v in layer_basis]:
+        for vc in complement_basis:
+            assert(abs(np.dot(vl, vc)[0, 0]) < 1e-12)
 
     # Mirror operation:
     # M|m_0> = |m_0>; M|m_2> = -|m_2>; M|m_1> = |m_1> (? depends on M|p_z>).
@@ -159,6 +195,12 @@ def _main():
     print("mstar_inv")
     print(mstar_invs)
 
+    E_repr = sum([Es[t] for t in top]) / len(top)
+    mstar_invs_correction = correction_Hamiltonian_mstar_inverses(K_cart, Hr, latVecs, E_repr, complement_basis, layer_basis)
+
+    print("mstar_inv_correction")
+    print(mstar_invs_correction)
+
     H_layers = []
     for k in ks:
         q = k - K_cart
@@ -168,7 +210,8 @@ def _main():
         second_order = []
         for cp in range(2):
             for c in range(2):
-                second_order.append((1/2) * q[cp] * q[c] * mstar_invs[(cp, c)])
+                mstar_eff = mstar_invs[(cp, c)] + mstar_invs_correction[(cp, c)]
+                second_order.append((1/2) * q[cp] * q[c] * mstar_eff)
 
         H_layers.append(H_layer_K + sum(first_order) + sum(second_order))
         #H_layers.append(H_layer_K)
