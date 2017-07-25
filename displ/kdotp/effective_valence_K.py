@@ -252,6 +252,10 @@ def _main():
     print("H_correction max")
     print(abs(H_correction).max())
 
+    H_PQ = correction_Hamiltonian_PQ(K_cart, Hr, latVecs, complement_basis, layer_basis)
+    print("H_PQ max")
+    print(abs(H_PQ).max())
+
     # Momentum expectation values <z_{lp}| dH/dk_{c}|_K |z_l>
     ps = layer_Hamiltonian_ps(K_cart, Hr, latVecs, layer_basis)
     

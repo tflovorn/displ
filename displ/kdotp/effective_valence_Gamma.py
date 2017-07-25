@@ -14,7 +14,7 @@ from displ.kdotp.separability_K import get_layer_projections
 from displ.kdotp.effective_valence_K import (layer_basis_from_dm,
         array_with_rows, layer_Hamiltonian_0th_order, layer_Hamiltonian_ps,
         layer_Hamiltonian_mstar_inverses, correction_Hamiltonian_0th_order,
-        correction_Hamiltonian_mstar_inverses)
+        correction_Hamiltonian_mstar_inverses, correction_Hamiltonian_PQ)
 
 def _main():
     np.set_printoptions(threshold=np.inf)
@@ -67,7 +67,10 @@ def _main():
     print("layer weights")
     print(layer_weights)
     print("layer basis")
-    print(layer_basis)
+    for i, v in enumerate(layer_basis):
+        print("state ", i)
+        for j in range(len(v)):
+            print(j, v[j])
 
     complement_basis_mat = nullspace(array_with_rows(layer_basis).conjugate())
     complement_basis = []
@@ -94,6 +97,10 @@ def _main():
     print(H_correction)
     print("H_correction max")
     print(abs(H_correction).max())
+
+    H_PQ = correction_Hamiltonian_PQ(K_cart, Hr, latVecs, complement_basis, layer_basis)
+    print("H_PQ max")
+    print(abs(H_PQ).max())
 
     # Momentum expectation values <z_{lp}| dH/dk_{c}|_Gamma |z_l>
     ps = layer_Hamiltonian_ps(Gamma_cart, Hr, latVecs, layer_basis)
