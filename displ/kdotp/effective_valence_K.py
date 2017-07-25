@@ -144,6 +144,8 @@ def _main():
             help="Subdirectory under work_base where calculation was run")
     parser.add_argument("--num_layers", type=int, default=3,
             help="Number of layers")
+    parser.add_argument("--states_from_dm", action='store_true',
+            help="Choose states from layer-projected density matrix")
     args = parser.parse_args()
 
     if args.num_layers != 3:
@@ -178,24 +180,36 @@ def _main():
 
     top = top_valence_indices(E_F, 2*args.num_layers, Es)
 
-    # Basis states for the effective Hamiltonian:
-    # |P_{z = 0} m_0> (m_0 = highest valence state);
-    # |P_{z = 1} m_1>
-    # |P_{z = 2} m_0>.
-    # TODO support arbitrary layer number
-    layer_basis_indices = [(0, 0), (0, 4), (1, 1), (1, 5), (2, 0), (2, 4)]
-    layer_basis = []
+    if args.states_from_dm:
+        top_states = [U[:, [t]] for t in top]
 
-    for z, m in layer_basis_indices:
-        Pz = Pzs[z]
-    
-        band_index = top[m]
-        eigenstate = U[:, [band_index]]
+        layer_weights, layer_basis = layer_basis_from_dm(top_states, Pzs)
+        print("layer weights")
+        print(layer_weights)
+        print("layer basis")
+        for i, v in enumerate(layer_basis):
+            print("state ", i)
+            for j in range(len(v)):
+                print(j, v[j])
+    else:
+        # Basis states for the effective Hamiltonian:
+        # |P_{z = 0} m_0> (m_0 = highest valence state);
+        # |P_{z = 1} m_1>
+        # |P_{z = 2} m_0>.
+        # TODO support arbitrary layer number
+        layer_basis_indices = [(0, 0), (0, 4), (1, 1), (1, 5), (2, 0), (2, 4)]
+        layer_basis = []
 
-        proj_state = np.dot(Pz, eigenstate)
-        proj_state_normed = proj_state / np.linalg.norm(proj_state)
+        for z, m in layer_basis_indices:
+            Pz = Pzs[z]
+        
+            band_index = top[m]
+            eigenstate = U[:, [band_index]]
 
-        layer_basis.append(proj_state_normed)
+            proj_state = np.dot(Pz, eigenstate)
+            proj_state_normed = proj_state / np.linalg.norm(proj_state)
+
+            layer_basis.append(proj_state_normed)
 
     complement_basis_mat = nullspace(array_with_rows(layer_basis).conjugate())
     complement_basis = []
