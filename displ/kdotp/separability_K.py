@@ -12,7 +12,6 @@ from displ.kdotp.model_weights_K import vec_linspace, top_valence_indices
 
 def density_matrix(states, probabilities):
     eps_abs, eps_rel = 1e-12, 1e-12
-    assert(near_equal(sum(probabilities), 1.0, eps_abs, eps_rel))
 
     dimension = states[0].shape[0] # assume states are row vectors
     dm = np.zeros([dimension, dimension], dtype=np.complex128)
@@ -24,7 +23,7 @@ def density_matrix(states, probabilities):
                 dm[ip, i] += p * v[ip, 0] * v[i, 0].conjugate()
 
     assert_diagonal_real(dm, eps_abs)
-    assert(near_equal(np.trace(dm), 1.0, eps_abs, eps_rel))
+    assert(near_equal(np.trace(dm), sum(probabilities), eps_abs, eps_rel))
 
     return dm
 

@@ -10,7 +10,24 @@ from displ.wannier.extractHr import extractHr
 from displ.wannier.bands import Hk, dHk_dk, d2Hk_dk
 from displ.kdotp.linalg import nullspace
 from displ.kdotp.model_weights_K import vec_linspace, top_valence_indices
-from displ.kdotp.separability_K import get_layer_projections
+from displ.kdotp.separability_K import get_layer_projections, density_matrix
+
+def layer_basis_from_dm(states, Pzs):
+    dm = density_matrix(states, [1]*len(states))
+
+    states_per_layer = len(states) // len(Pzs)
+    layer_weights, layer_basis = [], []
+
+    for Pz in Pzs:
+        proj_dm = np.dot(Pz, np.dot(dm, Pz))
+        proj_dm_evals, proj_dm_evecs = np.linalg.eigh(proj_dm)
+
+        for i in range(states_per_layer):
+            state_index = len(proj_dm_evals) - i - 1
+            layer_weights.append(proj_dm_evals[state_index])
+            layer_basis.append(proj_dm_evecs[:, [state_index]])
+
+    return layer_weights, layer_basis
 
 def array_with_rows(xs):
     A = np.zeros([len(xs), len(xs[0])], dtype=np.complex128)
@@ -56,14 +73,29 @@ def layer_Hamiltonian_mstar_inverses(k0_cart, Hr, latVecs, layer_basis):
 
     return mstar_invs
 
-def correction_Hamiltonian_mstar_inverses(k0_cart, Hr, latVecs, E_repr, complement_basis, layer_basis):
-    H_k0 = Hk(k0_cart, Hr, latVecs)
-    dHk_dk_k0 = dHk_dk(k0_cart, Hr, latVecs)
+def correction_Hamiltonian_QQ(k0_cart, Hr, latVecs, complement_basis):
+    Hk_k0 = Hk(k0_cart, Hr, latVecs)
 
     H_QQ = np.zeros([len(complement_basis), len(complement_basis)], dtype=np.complex128)
     for zp, zp_state in enumerate([v.conjugate().T for v in complement_basis]):
         for z, z_state in enumerate(complement_basis):
-            H_QQ[zp, z] = np.dot(zp_state, np.dot(H_k0, z_state))[0, 0]
+            H_QQ[zp, z] = np.dot(zp_state, np.dot(Hk_k0, z_state))[0, 0]
+
+    return H_QQ
+
+def correction_Hamiltonian_PQ(k0_cart, Hr, latVecs, complement_basis, layer_basis):
+    Hk_k0 = Hk(k0_cart, Hr, latVecs)
+
+    H_PQ = np.zeros([len(layer_basis), len(complement_basis)], dtype=np.complex128)
+
+    for zp, zp_state in enumerate([v.conjugate().T for v in layer_basis]):
+        for z, z_state in enumerate(complement_basis):
+            H_PQ[zp, z] = np.dot(zp_state, np.dot(Hk_k0, z_state))[0, 0]
+
+    return H_PQ
+
+def correction_Hamiltonian_derivs_PQ(k0_cart, Hr, latVecs, complement_basis, layer_basis):
+    dHk_dk_k0 = dHk_dk(k0_cart, Hr, latVecs)
 
     derivs_PQ = []
     for c in range(2):
@@ -74,6 +106,21 @@ def correction_Hamiltonian_mstar_inverses(k0_cart, Hr, latVecs, E_repr, compleme
                 dH_PQ[zp, z] = np.dot(zp_state, np.dot(dHk_dk_k0[c], z_state))[0, 0]
 
         derivs_PQ.append(dH_PQ)
+
+    return derivs_PQ
+
+def correction_Hamiltonian_0th_order(k0_cart, Hr, latVecs, E_repr, complement_basis, layer_basis):
+    H_QQ = correction_Hamiltonian_QQ(k0_cart, Hr, latVecs, complement_basis)
+    H_PQ = correction_Hamiltonian_PQ(k0_cart, Hr, latVecs, complement_basis, layer_basis)
+
+    center = np.linalg.inv(E_repr*np.eye(H_QQ.shape[0]) - H_QQ)
+    Hprime = np.dot(H_PQ, np.dot(center, H_PQ.conjugate().T))
+
+    return Hprime
+
+def correction_Hamiltonian_mstar_inverses(k0_cart, Hr, latVecs, E_repr, complement_basis, layer_basis):
+    H_QQ = correction_Hamiltonian_QQ(k0_cart, Hr, latVecs, complement_basis)
+    derivs_PQ = correction_Hamiltonian_derivs_PQ(k0_cart, Hr, latVecs, complement_basis, layer_basis)
 
     mstar_invs = {}
     for cp in range(2):
@@ -183,6 +230,14 @@ def _main():
     print("H0")
     print(H_layer_K)
 
+    #E_repr = sum([Es[t] for t in top]) / len(top)
+    E_repr = Es[top[0]]
+    H_correction = correction_Hamiltonian_0th_order(K_cart, Hr, latVecs, E_repr, complement_basis, layer_basis)
+    print("H_correction")
+    print(H_correction)
+    print("H_correction max")
+    print(abs(H_correction).max())
+
     # Momentum expectation values <z_{lp}| dH/dk_{c}|_K |z_l>
     ps = layer_Hamiltonian_ps(K_cart, Hr, latVecs, layer_basis)
     
@@ -195,7 +250,6 @@ def _main():
     print("mstar_inv")
     print(mstar_invs)
 
-    E_repr = sum([Es[t] for t in top]) / len(top)
     mstar_invs_correction = correction_Hamiltonian_mstar_inverses(K_cart, Hr, latVecs, E_repr, complement_basis, layer_basis)
 
     print("mstar_inv_correction")
@@ -213,8 +267,8 @@ def _main():
                 mstar_eff = mstar_invs[(cp, c)] + mstar_invs_correction[(cp, c)]
                 second_order.append((1/2) * q[cp] * q[c] * mstar_eff)
 
-        H_layers.append(H_layer_K + sum(first_order) + sum(second_order))
-        #H_layers.append(H_layer_K)
+        #H_layers.append(H_layer_K + sum(first_order) + sum(second_order))
+        H_layers.append(H_layer_K + H_correction + sum(first_order) + sum(second_order))
 
     Emks, Umks = [], []
     for band_index in range(len(layer_basis)):
