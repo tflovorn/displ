@@ -94,12 +94,13 @@ def correction_Hamiltonian_PQ(k0_cart, Hr, latVecs, complement_basis, layer_basi
 
     return H_PQ
 
-def correction_Hamiltonian_derivs_PQ(k0_cart, Hr, latVecs, complement_basis, layer_basis):
+def correction_Hamiltonian_derivs(k0_cart, Hr, latVecs, complement_basis, layer_basis):
     dHk_dk_k0 = dHk_dk(k0_cart, Hr, latVecs)
 
-    derivs_PQ = []
+    derivs_PQ, derivs_QQ = [], []
     for c in range(2):
         dH_PQ = np.zeros([len(layer_basis), len(complement_basis)], dtype=np.complex128)
+        dH_QQ = np.zeros([len(complement_basis), len(complement_basis)], dtype=np.complex128)
 
         for zp, zp_state in enumerate([v.conjugate().T for v in layer_basis]):
             for z, z_state in enumerate(complement_basis):
@@ -107,7 +108,32 @@ def correction_Hamiltonian_derivs_PQ(k0_cart, Hr, latVecs, complement_basis, lay
 
         derivs_PQ.append(dH_PQ)
 
-    return derivs_PQ
+        for zp, zp_state in enumerate([v.conjugate().T for v in complement_basis]):
+            for z, z_state in enumerate(complement_basis):
+                dH_QQ[zp, z] = np.dot(zp_state, np.dot(dHk_dk_k0[c], z_state))[0, 0]
+
+        derivs_QQ.append(dH_QQ)
+
+    return derivs_PQ, derivs_QQ
+
+def correction_Hamiltonian_second_derivs(k0_cart, Hr, latVecs, complement_basis, layer_basis):
+    d2Hk_dk_k0 = d2Hk_dk(k0_cart, Hr, latVecs)
+
+    second_derivs_PQ, second_derivs_QQ = {}, {} # second_derivs[(cp, c)][zp, z]
+    for cp in range(2):
+        for c in range(2):
+            second_derivs_PQ[(cp, c)] = np.zeros([len(layer_basis), len(complement_basis)], dtype=np.complex128)
+            second_derivs_QQ[(cp, c)] = np.zeros([len(complement_basis), len(complement_basis)], dtype=np.complex128)
+
+            for zp, zp_state in enumerate([v.conjugate().T for v in layer_basis]):
+                for z, z_state in enumerate(complement_basis):
+                    second_derivs_PQ[(cp, c)][zp, z] = np.dot(zp_state, np.dot(d2Hk_dk_k0[(cp, c)], z_state))[0, 0]
+
+            for zp, zp_state in enumerate([v.conjugate().T for v in complement_basis]):
+                for z, z_state in enumerate(complement_basis):
+                    second_derivs_QQ[(cp, c)][zp, z] = np.dot(zp_state, np.dot(d2Hk_dk_k0[(cp, c)], z_state))[0, 0]
+
+    return second_derivs_PQ, second_derivs_QQ
 
 def correction_Hamiltonian_0th_order(k0_cart, Hr, latVecs, E_repr, complement_basis, layer_basis):
     H_QQ = correction_Hamiltonian_QQ(k0_cart, Hr, latVecs, complement_basis)
@@ -118,20 +144,57 @@ def correction_Hamiltonian_0th_order(k0_cart, Hr, latVecs, E_repr, complement_ba
 
     return Hprime
 
+def correction_Hamiltonian_ps(k0_cart, Hr, latVecs, E_repr, complement_basis, layer_basis):
+    H_QQ = correction_Hamiltonian_QQ(k0_cart, Hr, latVecs, complement_basis)
+    H_PQ = correction_Hamiltonian_PQ(k0_cart, Hr, latVecs, complement_basis, layer_basis)
+    H_QP = H_PQ.conjugate().T
+
+    derivs_PQ, derivs_QQ = correction_Hamiltonian_derivs(k0_cart, Hr, latVecs, complement_basis, layer_basis)
+    derivs_QP = [M.conjugate().T for M in derivs_PQ]
+
+    ps = []
+    for c in range(2):
+         Dinv = np.linalg.inv(E_repr*np.eye(H_QQ.shape[0]) - H_QQ)
+
+         ps.append(derivs_PQ[c] @ Dinv @ H_QP
+                 + H_PQ @ Dinv @ derivs_QP[c]
+                 + H_PQ @ Dinv @ derivs_QQ[c] @ Dinv @ H_QP)
+
+    return ps
+
 def correction_Hamiltonian_mstar_inverses(k0_cart, Hr, latVecs, E_repr, complement_basis, layer_basis):
     H_QQ = correction_Hamiltonian_QQ(k0_cart, Hr, latVecs, complement_basis)
-    derivs_PQ = correction_Hamiltonian_derivs_PQ(k0_cart, Hr, latVecs, complement_basis, layer_basis)
+    H_PQ = correction_Hamiltonian_PQ(k0_cart, Hr, latVecs, complement_basis, layer_basis)
+    H_QP = H_PQ.conjugate().T
 
-    mstar_invs = {}
+    derivs_PQ, derivs_QQ = correction_Hamiltonian_derivs(k0_cart, Hr, latVecs, complement_basis, layer_basis)
+    derivs_QP = [M.conjugate().T for M in derivs_PQ]
+
+    d2s_PQ, d2s_QQ = correction_Hamiltonian_second_derivs(k0_cart, Hr, latVecs, complement_basis, layer_basis)
+    d2s_QP = {k: M.conjugate().T for (k, M) in d2s_PQ.items()}
+
+    mstar_invs_base, mstar_invs_other = {}, {}
     for cp in range(2):
         for c in range(2):
-            center = np.linalg.inv(E_repr*np.eye(H_QQ.shape[0]) - H_QQ)
-            Hprime = (np.dot(derivs_PQ[cp], np.dot(center, derivs_PQ[c].conjugate().T))
-                    + np.dot(derivs_PQ[c], np.dot(center, derivs_PQ[cp].conjugate().T)))
+            Dinv = np.linalg.inv(E_repr*np.eye(H_QQ.shape[0]) - H_QQ)
+            # Terms which are finite even if H_PQ = 0.
+            base = (derivs_PQ[cp] @ Dinv @ derivs_QP[c]
+                  + derivs_PQ[c] @ Dinv @ derivs_QP[cp])
+            # Remaining terms.
+            other = (d2s_PQ[(cp, c)] @ Dinv @ H_QP
+                   + H_PQ @ Dinv @ d2s_QP[(cp, c)]
+                   + derivs_PQ[c] @ Dinv @ derivs_QQ[cp] @ Dinv @ H_QP
+                   + H_PQ @ Dinv @ derivs_QQ[cp] @ Dinv @ derivs_QP[c]
+                   + derivs_PQ[cp] @ Dinv @ derivs_QQ[c] @ Dinv @ H_QP
+                   + H_PQ @ Dinv @ d2s_QQ[(cp, c)] @ Dinv @ H_QP
+                   + H_PQ @ Dinv @ derivs_QQ[c] @ Dinv @ derivs_QP[cp]
+                   + H_PQ @ Dinv @ derivs_QQ[cp] @ Dinv @ derivs_QQ[c] @ Dinv @ H_QP
+                   + H_PQ @ Dinv @ derivs_QQ[c] @ Dinv @ derivs_QQ[cp] @ Dinv @ H_QP)
 
-            mstar_invs[(cp, c)] = Hprime
+            mstar_invs_base[(cp, c)] = base
+            mstar_invs_other[(cp, c)] = other
 
-    return mstar_invs
+    return mstar_invs_base, mstar_invs_other
 
 def _main():
     np.set_printoptions(threshold=np.inf)
@@ -259,8 +322,19 @@ def _main():
     # Momentum expectation values <z_{lp}| dH/dk_{c}|_K |z_l>
     ps = layer_Hamiltonian_ps(K_cart, Hr, latVecs, layer_basis)
     
-    print("p")
+    print("ps")
     print(ps)
+
+    print("ps max")
+    print(max([abs(x).max() for x in ps]))
+
+    ps_correction = correction_Hamiltonian_ps(K_cart, Hr, latVecs, E_repr, complement_basis, layer_basis)
+    
+    print("ps correction")
+    print(ps_correction)
+
+    print("ps_correction max")
+    print(max([abs(x).max() for x in ps_correction]))
 
     # Inverse effective masses <z_{lp}| d^2H/dk_{cp}dk_{c}|_K |z_l>
     mstar_invs = layer_Hamiltonian_mstar_inverses(K_cart, Hr, latVecs, layer_basis)
@@ -268,24 +342,37 @@ def _main():
     print("mstar_inv")
     print(mstar_invs)
 
-    mstar_invs_correction = correction_Hamiltonian_mstar_inverses(K_cart, Hr, latVecs, E_repr, complement_basis, layer_basis)
+    print("mstar_inv max")
+    print(max([abs(v).max() for k, v in mstar_invs.items()]))
 
-    print("mstar_inv_correction")
-    print(mstar_invs_correction)
+    mstar_invs_correction_base, mstar_invs_correction_other = correction_Hamiltonian_mstar_inverses(K_cart, Hr, latVecs, E_repr, complement_basis, layer_basis)
+
+    print("mstar_inv_correction_base")
+    print(mstar_invs_correction_base)
+
+    print("mstar_inv_correction_base max")
+    print(max([abs(v).max() for k, v in mstar_invs_correction_base.items()]))
+
+    print("mstar_inv_correction_other")
+    print(mstar_invs_correction_other)
+
+    print("mstar_inv_correction_other max")
+    print(max([abs(v).max() for k, v in mstar_invs_correction_other.items()]))
 
     H_layers = []
     for k in ks:
         q = k - K_cart
 
-        first_order = [q[c] * ps[c] for c in range(2)]
+        first_order = [q[c] * (ps[c] + ps_correction[c]) for c in range(2)]
 
         second_order = []
         for cp in range(2):
             for c in range(2):
-                mstar_eff = mstar_invs[(cp, c)] + mstar_invs_correction[(cp, c)]
+                mstar_eff = (mstar_invs[(cp, c)]
+                        + mstar_invs_correction_base[(cp, c)]
+                        + mstar_invs_correction_other[(cp, c)])
                 second_order.append((1/2) * q[cp] * q[c] * mstar_eff)
 
-        #H_layers.append(H_layer_K + sum(first_order) + sum(second_order))
         H_layers.append(H_layer_K + H_correction + sum(first_order) + sum(second_order))
 
     Emks, Umks = [], []

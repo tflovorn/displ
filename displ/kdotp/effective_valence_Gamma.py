@@ -14,7 +14,8 @@ from displ.kdotp.separability_K import get_layer_projections
 from displ.kdotp.effective_valence_K import (layer_basis_from_dm,
         array_with_rows, layer_Hamiltonian_0th_order, layer_Hamiltonian_ps,
         layer_Hamiltonian_mstar_inverses, correction_Hamiltonian_0th_order,
-        correction_Hamiltonian_mstar_inverses, correction_Hamiltonian_PQ)
+        correction_Hamiltonian_ps, correction_Hamiltonian_mstar_inverses,
+        correction_Hamiltonian_PQ)
 
 def _main():
     np.set_printoptions(threshold=np.inf)
@@ -108,27 +109,52 @@ def _main():
     print("p")
     print(ps)
 
+    print("ps max")
+    print(max([abs(x).max() for x in ps]))
+
+    ps_correction = correction_Hamiltonian_ps(Gamma_cart, Hr, latVecs, E_repr, complement_basis, layer_basis)
+    
+    print("ps correction")
+    print(ps_correction)
+
+    print("ps_correction max")
+    print(max([abs(x).max() for x in ps_correction]))
+
     # Inverse effective masses <z_{lp}| d^2H/dk_{cp}dk_{c}|_Gamma |z_l>
     mstar_invs = layer_Hamiltonian_mstar_inverses(Gamma_cart, Hr, latVecs, layer_basis)
 
     print("mstar_inv")
     print(mstar_invs)
 
-    mstar_invs_correction = correction_Hamiltonian_mstar_inverses(Gamma_cart, Hr, latVecs, E_repr, complement_basis, layer_basis)
+    print("mstar_inv max")
+    print(max([abs(v).max() for k, v in mstar_invs.items()]))
 
-    print("mstar_inv_correction")
-    print(mstar_invs_correction)
+    mstar_invs_correction_base, mstar_invs_correction_other = correction_Hamiltonian_mstar_inverses(Gamma_cart, Hr, latVecs, E_repr, complement_basis, layer_basis)
+
+    print("mstar_inv_correction_base")
+    print(mstar_invs_correction_base)
+
+    print("mstar_inv_correction_base max")
+    print(max([abs(v).max() for k, v in mstar_invs_correction_base.items()]))
+
+    print("mstar_inv_correction_other")
+    print(mstar_invs_correction_other)
+
+    print("mstar_inv_correction_other max")
+    print(max([abs(v).max() for k, v in mstar_invs_correction_other.items()]))
 
     H_layers = []
     for k in ks:
         q = k - Gamma_cart
 
-        first_order = [q[c] * ps[c] for c in range(2)]
+        first_order = [q[c] * (ps[c] + ps_correction[c]) for c in range(2)]
 
         second_order = []
         for cp in range(2):
             for c in range(2):
-                mstar_eff = mstar_invs[(cp, c)] + mstar_invs_correction[(cp, c)]
+                mstar_eff = (mstar_invs[(cp, c)]
+                        + mstar_invs_correction_base[(cp, c)]
+                        + mstar_invs_correction_other[(cp, c)])
                 second_order.append((1/2) * q[cp] * q[c] * mstar_eff)
 
         H_layers.append(H_layer_Gamma + H_correction + sum(first_order) + sum(second_order))
