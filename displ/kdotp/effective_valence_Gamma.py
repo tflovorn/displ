@@ -10,7 +10,7 @@ from displ.wannier.extractHr import extractHr
 from displ.wannier.bands import Hk, dHk_dk, d2Hk_dk
 from displ.kdotp.linalg import nullspace
 from displ.kdotp.model_weights_K import vec_linspace, top_valence_indices
-from displ.kdotp.separability_K import get_layer_projections
+from displ.kdotp.separability_K import get_layer_projections, get_total_orbitals
 from displ.kdotp.effective_valence_K import (layer_basis_from_dm,
         array_with_rows, layer_Hamiltonian_0th_order, layer_Hamiltonian_ps,
         layer_Hamiltonian_mstar_inverses, correction_Hamiltonian_0th_order,
@@ -28,6 +28,8 @@ def _main():
             help="Subdirectory under work_base where calculation was run")
     parser.add_argument("--num_layers", type=int, default=3,
             help="Number of layers")
+    parser.add_argument("--top_two_only", action='store_true',
+            help="Consider only the top two valence states, without layer-projection")
     args = parser.parse_args()
 
     if args.num_layers != 3:
@@ -56,12 +58,19 @@ def _main():
     Hr_path = os.path.join(wannier_dir, "{}_hr.dat".format(args.prefix))
     Hr = extractHr(Hr_path)
 
-    Pzs = get_layer_projections(args.num_layers)
+    if args.top_two_only:
+        Pzs = [np.eye(get_total_orbitals(args.num_layers))]
+    else:
+        Pzs = get_layer_projections(args.num_layers)
 
     H_TB_Gamma = Hk(Gamma_cart, Hr, latVecs)
     Es, U = np.linalg.eigh(H_TB_Gamma)
 
-    top = top_valence_indices(E_F, 2*args.num_layers, Es)
+    if args.top_two_only:
+        top = top_valence_indices(E_F, 2, Es)
+    else:
+        top = top_valence_indices(E_F, 2*args.num_layers, Es)
+
     top_states = [U[:, [t]] for t in top]
 
     layer_weights, layer_basis = layer_basis_from_dm(top_states, Pzs)
