@@ -7,6 +7,7 @@ setup(name='displ', packages=find_packages(),
         install_requires=[
             'numpy',
             'matplotlib',
-            'ase'
+            'ase',
+            'numdifftools'
         ]
      )
