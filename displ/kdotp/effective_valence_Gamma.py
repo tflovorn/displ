@@ -5,7 +5,7 @@ import itertools
 import numpy as np
 import matplotlib.pyplot as plt
 from displ.build.build import _get_work, band_path_labels
-from displ.pwscf.parseScf import fermi_from_scf, latVecs_from_scf
+from displ.pwscf.parseScf import fermi_from_scf, latVecs_from_scf, alat_from_scf
 from displ.wannier.extractHr import extractHr
 from displ.wannier.bands import Hk, dHk_dk, d2Hk_dk
 from displ.kdotp.linalg import nullspace
@@ -15,7 +15,7 @@ from displ.kdotp.effective_valence_K import (layer_basis_from_dm,
         array_with_rows, layer_Hamiltonian_0th_order, layer_Hamiltonian_ps,
         layer_Hamiltonian_mstar_inverses, correction_Hamiltonian_0th_order,
         correction_Hamiltonian_ps, correction_Hamiltonian_mstar_inverses,
-        correction_Hamiltonian_PQ)
+        correction_Hamiltonian_PQ, H_kdotp, effective_mass_band)
 
 def _main():
     np.set_printoptions(threshold=np.inf)
@@ -41,6 +41,7 @@ def _main():
 
     E_F = fermi_from_scf(scf_path)
     latVecs = latVecs_from_scf(scf_path)
+    alat_Bohr = 1.0
     R = 2 * np.pi * np.linalg.inv(latVecs.T)
 
     Gamma_cart = np.array([0.0, 0.0, 0.0])
@@ -156,17 +157,9 @@ def _main():
     for k in ks:
         q = k - Gamma_cart
 
-        first_order = [q[c] * (ps[c] + ps_correction[c]) for c in range(2)]
-
-        second_order = []
-        for cp in range(2):
-            for c in range(2):
-                mstar_eff = (mstar_invs[(cp, c)]
-                        + mstar_invs_correction_base[(cp, c)]
-                        + mstar_invs_correction_other[(cp, c)])
-                second_order.append((1/2) * q[cp] * q[c] * mstar_eff)
-
-        H_layers.append(H_layer_Gamma + H_correction + sum(first_order) + sum(second_order))
+        H_layers.append(H_kdotp(q, H_layer_Gamma, H_correction, ps,
+                ps_correction, mstar_invs, mstar_invs_correction_base,
+                mstar_invs_correction_other))
 
     Emks, Umks = [], []
     for band_index in range(len(layer_basis)):
@@ -200,6 +193,15 @@ def _main():
         plt.plot(xs, TB_Em, 'k.')
 
     plt.show()
+
+    print("effective mass, top valence band, TB model: m^*_{xx; yy; xy}")
+    print(effective_mass_band(lambda k: Hk(k, Hr, latVecs), Gamma_cart, top[0], alat_Bohr))
+
+    print("effective mass, top valence band, k dot p model: m^*_{xx; yy; xy}")
+    print(effective_mass_band(lambda k: H_kdotp(k - Gamma_cart, H_layer_Gamma,
+            H_correction, ps, ps_correction, mstar_invs,
+            mstar_invs_correction_base, mstar_invs_correction_other),
+            Gamma_cart, len(layer_basis) - 1, alat_Bohr))
 
 if __name__ == "__main__":
     _main()

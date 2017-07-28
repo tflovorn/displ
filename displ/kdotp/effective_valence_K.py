@@ -4,8 +4,9 @@ import os
 import itertools
 import numpy as np
 import matplotlib.pyplot as plt
+import numdifftools as nd
 from displ.build.build import _get_work, band_path_labels
-from displ.pwscf.parseScf import fermi_from_scf, latVecs_from_scf
+from displ.pwscf.parseScf import fermi_from_scf, latVecs_from_scf, alat_from_scf
 from displ.wannier.extractHr import extractHr
 from displ.wannier.bands import Hk, dHk_dk, d2Hk_dk
 from displ.kdotp.linalg import nullspace
@@ -196,6 +197,37 @@ def correction_Hamiltonian_mstar_inverses(k0_cart, Hr, latVecs, E_repr, compleme
 
     return mstar_invs_base, mstar_invs_other
 
+def H_kdotp(q, H_layer_k0, H_correction, ps, ps_correction, mstar_invs, mstar_invs_correction_base,
+        mstar_invs_correction_other):
+    first_order = [q[c] * (ps[c] + ps_correction[c]) for c in range(2)]
+
+    second_order = []
+    for cp in range(2):
+        for c in range(2):
+            mstar_eff = (mstar_invs[(cp, c)]
+                    + mstar_invs_correction_base[(cp, c)]
+                    + mstar_invs_correction_other[(cp, c)])
+            second_order.append((1/2) * q[cp] * q[c] * mstar_eff)
+
+    return H_layer_k0 + H_correction + sum(first_order) + sum(second_order)
+
+def effective_mass_band(Hfn, k0, band_index, alat_Bohr):
+    def band_energy(k):
+        Es, U = np.linalg.eigh(Hfn(k))
+        return Es[band_index]
+
+    curvature = nd.Hessian(band_energy)(k0)
+
+    hbar_eV_s = 6.582119514e-16
+    me_eV_per_c2 = 0.5109989461e6
+    c_m_per_s = 2.99792458e8
+    Bohr_m = 0.52917721067e-10
+    fac = hbar_eV_s**2 / (me_eV_per_c2 * (c_m_per_s)**(-2) * (Bohr_m)**2 * alat_Bohr**2)
+
+    mstars = [-fac/curvature[0, 0], -fac/curvature[1, 1], -fac/curvature[0, 1]]
+
+    return mstars
+
 def _main():
     np.set_printoptions(threshold=np.inf)
 
@@ -220,6 +252,7 @@ def _main():
 
     E_F = fermi_from_scf(scf_path)
     latVecs = latVecs_from_scf(scf_path)
+    alat_Bohr = 1.0
     R = 2 * np.pi * np.linalg.inv(latVecs.T)
 
     K_lat = np.array([1/3, 1/3, 0.0])
@@ -286,21 +319,6 @@ def _main():
         for vc in complement_basis:
             assert(abs(np.dot(vl, vc)[0, 0]) < 1e-12)
 
-    # Mirror operation:
-    # M|m_0> = |m_0>; M|m_2> = -|m_2>; M|m_1> = |m_1> (? depends on M|p_z>).
-    # Want to preserve this is TB basis.
-
-    # |z_0> = |P_{z = 0}, m0> + |P_{z = 0}, m2>
-    # |z_1> = |P_{z = 1}, m1>
-    # |z_2> = |P_{z = 2}, m0> - |P_{z = 2}, m2>
-    #layer_states = [
-    #        U[:, top[0]] + U[:, top[2]],
-    #        U[:, top[1]],
-    #        U[:, top[0]] - U[:, top[2]]
-    #]
-    #proj_states = [np.dot(Pzs[z], v) for z, v in enumerate(layer_states)]
-    #layer_basis = [v / np.linalg.norm(v) for v in proj_states]
-
     # 0th order effective Hamiltonian: H(K) in layer basis.
     H_layer_K = layer_Hamiltonian_0th_order(H_TB_K, layer_basis)
 
@@ -363,17 +381,9 @@ def _main():
     for k in ks:
         q = k - K_cart
 
-        first_order = [q[c] * (ps[c] + ps_correction[c]) for c in range(2)]
-
-        second_order = []
-        for cp in range(2):
-            for c in range(2):
-                mstar_eff = (mstar_invs[(cp, c)]
-                        + mstar_invs_correction_base[(cp, c)]
-                        + mstar_invs_correction_other[(cp, c)])
-                second_order.append((1/2) * q[cp] * q[c] * mstar_eff)
-
-        H_layers.append(H_layer_K + H_correction + sum(first_order) + sum(second_order))
+        H_layers.append(H_kdotp(q, H_layer_K, H_correction, ps, ps_correction,
+                mstar_invs, mstar_invs_correction_base,
+                mstar_invs_correction_other))
 
     Emks, Umks = [], []
     for band_index in range(len(layer_basis)):
@@ -407,6 +417,17 @@ def _main():
         plt.plot(xs, TB_Em, 'k.')
 
     plt.show()
+
+    print("effective mass, top valence band, TB model: m^*_{xx; yy; xy} / m_e")
+    mstar_TB = effective_mass_band(lambda k: Hk(k, Hr, latVecs), K_cart, top[0], alat_Bohr)
+    print(mstar_TB)
+
+    print("effective mass, top valence band, k dot p model: m^*_{xx; yy; xy} / m_e")
+    mstar_kdotp = effective_mass_band(lambda k: H_kdotp(k - K_cart, H_layer_K,
+            H_correction, ps, ps_correction, mstar_invs,
+            mstar_invs_correction_base, mstar_invs_correction_other),
+            K_cart, len(layer_basis) - 1, alat_Bohr)
+    print(mstar_kdotp)
 
 if __name__ == "__main__":
     _main()
