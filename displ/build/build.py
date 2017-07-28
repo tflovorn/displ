@@ -44,7 +44,7 @@ def make_qe_config(system, D, soc, num_bands, xc, pp):
     degauss = 0.02
 
     Nk_scf = 18
-    Nk_nscf = 9
+    Nk_nscf = 18
     Nk_bands = 20
     Nk = {"scf": [Nk_scf, Nk_scf, 1], "nscf": [Nk_nscf, Nk_nscf, 1], "bands": Nk_bands}
 
@@ -335,6 +335,7 @@ def _main():
     latvecs, at_syms, cartpos = make_cell(db, syms, c_sep, vacuum_dist)
 
     system = Atoms(symbols=at_syms, positions=cartpos, cell=latvecs, pbc=True)
+    system.center(axis=2)
 
     wann_valence, num_wann = get_wann_valence(system.get_chemical_symbols(), soc)
     num_bands = get_num_bands(num_wann)
@@ -379,12 +380,12 @@ def _main():
         with open(win_path, 'w') as fp:
             fp.write(wannier_input)
 
-    num_nodes = 1
+    num_nodes = 2
     num_cores = 24*num_nodes
     queue_config = {"machine": "ls5", "cores": num_cores, "nodes": num_nodes, "queue": "normal",
             "hours": 12, "minutes": 0, "wannier": True, "project": "A-ph9",
             "global_prefix": global_prefix, "max_jobs": 1,
-            "outer_min": -10.0, "outer_max": 7.0,
+            "outer_min": -10.0, "outer_max": 5.0,
             "inner_min": -8.0, "inner_max": 3.0,
             "subdir": args.subdir, "qe_bands":_global_config()['qe_bands']}
 
