@@ -5,7 +5,7 @@ def Header(nbnd, num_wann):
     lines = ["num_bands = {}".format(str(nbnd))]
     lines.append("num_wann = {}".format(str(num_wann)))
     lines.append("num_iter = 0")
-    lines.append("hr_plot = true")
+    lines.append("write_hr = true")
     lines.append("")
     return lines
 
