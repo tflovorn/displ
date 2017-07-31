@@ -168,15 +168,24 @@ def layer_hole_density_at_E(H_k0s, phis, Pzs, band_indices, E, E0s=None, curvatu
 
     layer_weights = get_layer_weights(H_k0s, phis, Pzs, band_indices)
 
-    result = [0.0]*len(Pzs)
+    result = []
     for E0_k0, curvature_k0, weights_k0 in zip(E0s, curvatures, layer_weights):
+        result.append([])
         for E0, curvature, weights_k0_n in zip(E0_k0, curvature_k0, weights_k0):
+            result[-1].append([])
             for z, weight in enumerate(weights_k0_n):
                 cx, cy = curvature
                 # TODO factor out part after weight, same as overall hole density
-                result[z] += weight * np.sqrt(cx / cy) * (1/(4*np.pi)) * (-1/cx) * (E0 - E) * step(E0 - E)
+                val = weight * np.sqrt(cx / cy) * (1/(4*np.pi)) * (-1/cx) * (E0 - E) * step(E0 - E)
+                result[-1][-1].append(val)
 
-    return result
+    result_layer_total = [0.0]*len(Pzs)
+    for k0_index, E0_k0 in enumerate(E0s):
+        for band_index in range(len(E0_k0)):
+            for z in range(len(Pzs)):
+                result_layer_total[z] += result[k0_index][band_index][z]
+
+    return result, result_layer_total
 
 def plot_H_k0_phis(H_k0s, phis, Pzs, band_indices, E_F_base):
     qs = vec_linspace(np.array([0.0, 0.0, 0.0]), [0.3, 0.0, 0.0], 100)
@@ -240,11 +249,14 @@ def get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_den
         print("E_F")
         print(E_F)
 
-        new_nh = layer_hole_density_at_E(H_k0s, phis, Pzs, band_indices, E_F, E0s, curvatures)
+        new_nh, new_nh_layer_total = layer_hole_density_at_E(H_k0s, phis, Pzs, band_indices, E_F, E0s, curvatures)
         print("new_nh")
         print(new_nh)
 
-        new_sigmas = [__e_C * n for n in new_nh]
+        print("new_nh_layer_total")
+        print(new_nh_layer_total)
+
+        new_sigmas = [__e_C * n for n in new_nh_layer_total]
         print("new_sigmas")
         print(new_sigmas)
 
@@ -285,7 +297,7 @@ def _main():
 
     # TODO
     #E_below_V_nm = 0.5 # V/nm
-    E_below_V_nm = 0.1
+    E_below_V_nm = 0.5
     d_A = 6.488 # Angstrom
 
     d_bohr = __bohr_per_Angstrom * d_A
