@@ -14,6 +14,12 @@ from displ.wannier.bands import Hk
 from displ.kdotp.model_weights_K import vec_linspace, top_valence_indices
 from displ.kdotp.separability_K import get_layer_projections
 
+# Constants (physical and unit relations)
+__bohr_per_Angstrom = 1.889726164
+__epsilon_0_F_m = 8.8541878e-12 # F/m = C/Vm
+__epsilon_0_F_bohr = __epsilon_0_F_m / (10**10 * __bohr_per_Angstrom)
+__e_C = 1.60217662e-19 # C
+
 # Electric field below the lowest TMD layer -- E_below [V/a_Bohr]
 # Distance between W in adjacent TMD laeyers -- d [a_Bohr]
 # Total number of holes per unit area -- hole_density [a_Bohr^{-2}]
@@ -198,6 +204,52 @@ def plot_H_k0_phis(H_k0s, phis, Pzs, band_indices, E_F_base):
 
         plt.show()
 
+def get_phis(sigmas, d_bohr, E_below_V_bohr, epsilon_r):
+    d_eps = d_bohr / (epsilon_r * __epsilon_0_F_bohr)
+    phis = [0.0,
+            -d_bohr * E_below_V_bohr - d_eps * sigmas[0],
+            -2 * d_bohr * E_below_V_bohr - d_eps * (2 * sigmas[0] + sigmas[1])]
+    return phis
+
+def sigma_converged(sigmas, new_sigmas, tol_abs, tol_rel):
+    if new_sigmas is None:
+        return False
+
+    for s, sp in zip(sigmas, new_sigmas):
+        if abs(s - sp) > tol_abs:
+            return False
+
+        if abs(s - sp) > tol_rel * max(abs(s), abs(sp)):
+            return False
+
+    return True
+
+def get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_density_bohr2, d_bohr, E_below_V_bohr, epsilon_r, tol_abs, tol_rel):
+    sigmas = sigmas_initial
+    new_sigmas = None
+
+    while not sigma_converged(sigmas, new_sigmas, tol_abs, tol_rel):
+        if new_sigmas is not None:
+            sigmas = new_sigmas
+
+        phis = get_phis(sigmas, d_bohr, E_below_V_bohr, epsilon_r)
+        print("phis [V]")
+        print(phis)
+
+        E_F, E0s, curvatures = get_Fermi_energy(H_k0s, phis, Pzs, band_indices, hole_density_bohr2)
+        print("E_F")
+        print(E_F)
+
+        new_nh = layer_hole_density_at_E(H_k0s, phis, Pzs, band_indices, E_F, E0s, curvatures)
+        print("new_nh")
+        print(new_nh)
+
+        new_sigmas = [__e_C * n for n in new_nh]
+        print("new_sigmas")
+        print(new_sigmas)
+
+    return new_sigmas
+
 def _main():
     np.set_printoptions(threshold=np.inf)
 
@@ -232,39 +284,29 @@ def _main():
     Hr = extractHr(Hr_path)
 
     # TODO
-    E_below_V_nm = 0.5 # V/nm
-    #E_below_V_nm = 1.2
-    #E_below_V_nm = 0.0
+    #E_below_V_nm = 0.5 # V/nm
+    E_below_V_nm = 0.1
     d_A = 6.488 # Angstrom
 
-    bohr_per_Angstrom = 1.889726164
+    d_bohr = __bohr_per_Angstrom * d_A
+    E_below_V_bohr = E_below_V_nm / (10 * __bohr_per_Angstrom)
 
-    d_bohr = bohr_per_Angstrom * d_A
-    E_below_V_bohr = E_below_V_nm / (10 * bohr_per_Angstrom)
-
-    hole_density_cm2 = 8e12
+    #hole_density_cm2 = 8e12
     #hole_density_cm2 = 1e10
-    hole_density_bohr2 = hole_density_cm2 / (10**8 * bohr_per_Angstrom)**2
+    hole_density_cm2 = 1e12
+    hole_density_bohr2 = hole_density_cm2 / (10**8 * __bohr_per_Angstrom)**2
     print("hole_density_bohr2")
     print(hole_density_bohr2)
 
     epsilon_r = 10.0 # TODO relative permittivity felt in trilayer
-    epsilon_0_F_m = 8.8541878e-12 # F/m = C/Vm
-    epsilon_0_F_bohr = epsilon_0_F_m / (10**10 * bohr_per_Angstrom)
 
-    e_C = 1.60217662e-19 # C
 
     # Choose initial potential assuming holes are distributed uniformally.
-    sigma_layer_initial = (1/3) * e_C * hole_density_bohr2
+    sigma_layer_initial = (1/3) * __e_C * hole_density_bohr2
     print("sigma_layer_initial [C/bohr^2]")
     print(sigma_layer_initial)
 
-    phis_initial = [0.0,
-            -d_bohr * E_below_V_bohr - sigma_layer_initial * d_bohr / (epsilon_r * epsilon_0_F_bohr),
-            -2 * d_bohr * E_below_V_bohr - 3 * sigma_layer_initial * d_bohr / (epsilon_r * epsilon_0_F_bohr)]
-
-    print("phis_initial [V]")
-    print(phis_initial)
+    sigmas_initial = sigma_layer_initial * np.array([1.0, 1.0, 1.0])
 
     # Use full TB model -- TODO k dot p
     H_k0s, band_indices = [], []
@@ -282,15 +324,13 @@ def _main():
 
     Pzs = get_layer_projections(args.num_layers)
 
-    plot_H_k0_phis(H_k0s, phis_initial, Pzs, band_indices, E_F_base)
+    #phis_initial = get_phis(sigmas_initial)
+    #plot_H_k0_phis(H_k0s, phis_initial, Pzs, band_indices, E_F_base)
 
-    E_F, E0s, curvatures = get_Fermi_energy(H_k0s, phis_initial, Pzs, band_indices, hole_density_bohr2)
-    print("E_F")
-    print(E_F)
+    tol_abs = 1e-6 * sum(sigmas_initial)
+    tol_rel = 1e-6
 
-    new_sigmas = layer_hole_density_at_E(H_k0s, phis_initial, Pzs, band_indices, E_F, E0s, curvatures)
-    print("new_sigmas")
-    print(new_sigmas)
+    converged_sigma = get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_density_bohr2, d_bohr, E_below_V_bohr, epsilon_r, tol_abs, tol_rel)
 
 if __name__ == "__main__":
     _main()
