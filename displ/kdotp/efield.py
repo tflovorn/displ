@@ -2,6 +2,7 @@ from __future__ import division
 import argparse
 import os
 import itertools
+from functools import partial
 import numpy as np
 import numdifftools as nd
 from scipy.optimize import bisect
@@ -25,14 +26,15 @@ def H_k0_phis(H_k0s, phis, Pzs):
     '''[eV]
     '''
     result = []
-    for H in H_k0s:
-        def Hq(q):
-            H_base = H(q)
-            # e * phi has eV units.
-            phi_parts = [-phi * Pz for phi, Pz in zip(phis, Pzs)]
-            return H_base + sum(phi_parts)
 
-        result.append(Hq)
+    def Hq(H, q):
+        H_base = H(q)
+        # e * phi has eV units.
+        phi_parts = [-phi * Pz for phi, Pz in zip(phis, Pzs)]
+        return H_base + sum(phi_parts)
+
+    for H in H_k0s:
+        result.append(partial(Hq, H))
 
     return result
 
@@ -43,7 +45,7 @@ def energies_at_k0(H_k0s, phis, Pzs, band_indices):
     '''
     result = []
     for H_k0, band_indices_k0 in zip(H_k0_phis(H_k0s, phis, Pzs), band_indices):
-        q0 = [0.0, 0.0, 0.0]
+        q0 = np.array([0.0, 0.0, 0.0])
         Es, U = np.linalg.eigh(H_k0(q0))
 
         E0s = [Es[n0] for n0 in band_indices_k0]
@@ -59,17 +61,15 @@ def band_curvatures(H_k0s, phis, Pzs, band_indices):
 
     [eV Bohr^2]
     '''
+    def band_energy(H_k0, n, q):
+        Es, U = np.linalg.eigh(H_k0(q))
+        return Es[n]
+
     result = []
     for H_k0, band_indices_k0 in zip(H_k0_phis(H_k0s, phis, Pzs), band_indices):
         result.append([])
         for n in band_indices_k0:
-            print(n)
-            def band_energy(q):
-                Es, U = np.linalg.eigh(H_k0(q))
-                return Es[n]
-
-            curvatures = nd.Hessian(band_energy)([0.0, 0.0, 0.0])
-            # TODO - getting 0 result for this. why?
+            curvatures = nd.Hessian(partial(band_energy, H_k0, n))(np.array([0.0, 0.0, 0.0]))
             result[-1].append([curvatures[0, 0], curvatures[1, 1]])
 
     return result
@@ -88,27 +88,36 @@ def hole_density_at_E(E0s, curvatures, E):
         result.append([])
         for E0, curvature in zip(E0_k0, curvature_k0):
             cx, cy = curvature
-            print(cx, cy)
-            val = np.sqrt(cx/cy) * (1/(4*np.pi)) * (1/cx) * (E0 - E) * step(E0 - E)
+            val = np.sqrt(cx/cy) * (1/(4*np.pi)) * (-1/cx) * (E0 - E) * step(E0 - E)
             result[-1].append(val)
 
     return result
 
 def get_Fermi_energy(H_k0s, phis, Pzs, band_indices, hole_density):
     E0s = energies_at_k0(H_k0s, phis, Pzs, band_indices)
-    curvatures = band_curvatures(H_k0s, phis, Pzs, band_indices)
-    print("in get_Fermi_energy got E0s = ")
-    print(E0s)
-    print("curvatures = ")
-    print(curvatures)
-
-    def error_fn(E):
-        return hole_density - sum([sum(hk) for hk in hole_density_at_E(E0s, curvatures, E)])
 
     E_min = min([min(E0s_k0) for E0s_k0 in E0s])
     E_max = max([max(E0s_k0) for E0s_k0 in E0s])
 
-    return bisect(error_fn, E_min, E_max)
+    print("in get_Fermi_energy got E0s = ")
+    print(E0s)
+    print(E_min, E_max)
+
+    curvatures = band_curvatures(H_k0s, phis, Pzs, band_indices)
+    print("curvatures = ")
+    print(curvatures)
+
+    def error_fn(E):
+        band_hole_density = hole_density_at_E(E0s, curvatures, E)
+        #print("E, band_hole_density")
+        #print(E)
+        #print(band_hole_density)
+        return hole_density - sum([sum(hk) for hk in band_hole_density])
+
+    print("n_h error at E_min, E_max")
+    print(error_fn(E_min), error_fn(E_max))
+
+    return bisect(error_fn, E_min, E_max), E0s, curvatures
 
 def get_layer_weights(H_k0s, phis, Pzs, band_indices):
     '''Returns list of weight[k0_index][n0][layer_index] [unitless]
@@ -117,7 +126,7 @@ def get_layer_weights(H_k0s, phis, Pzs, band_indices):
     for H_k0, band_indices_k0 in zip(H_k0_phis(H_k0s, phis, Pzs), band_indices):
         result.append([])
 
-        q0 = [0.0, 0.0, 0.0]
+        q0 = np.array([0.0, 0.0, 0.0])
         Es, U = np.linalg.eigh(H_k0(q0))
 
         for n in band_indices_k0:
@@ -125,16 +134,18 @@ def get_layer_weights(H_k0s, phis, Pzs, band_indices):
 
             state = U[:, [n]]
             for Pz in Pzs:
-                weight = state.conjugate().T @ Pz @ state
+                weight = (state.conjugate().T @ Pz @ state)[0, 0]
                 result[-1][-1].append(weight)
 
     return result
 
-def layer_hole_density_at_E(H_k0s, phis, Pzs, band_indices, E):
+def layer_hole_density_at_E(H_k0s, phis, Pzs, band_indices, E, E0s=None, curvatures=None):
     '''n_h^A(l) [1/Bohr^2]
     '''
-    E0s = energies_at_k0(H_k0s, phis, Pzs, band_indices)
-    curvatures = band_curvatures(H_k0s, phis, Pzs, band_indices)
+    if E0s is None:
+        E0s = energies_at_k0(H_k0s, phis, Pzs, band_indices)
+    if curvatures is None:
+        curvatures = band_curvatures(H_k0s, phis, Pzs, band_indices)
 
     layer_weights = get_layer_weights(H_k0s, phis, Pzs, band_indices)
 
@@ -143,7 +154,8 @@ def layer_hole_density_at_E(H_k0s, phis, Pzs, band_indices, E):
         for E0, curvature, weights_k0_n in zip(E0_k0, curvature_k0, weights_k0):
             for z, weight in enumerate(weights_k0_n):
                 cx, cy = curvature
-                result[z] += np.sqrt(cx / cy) * weight * (1/(4*np.pi)) * (1/cx) * (E0 - E) * step(E0 - E)
+                # TODO factor out part after weight, same as overall hole density
+                result[z] += weight * np.sqrt(cx / cy) * (1/(4*np.pi)) * (-1/cx) * (E0 - E) * step(E0 - E)
 
     return result
 
@@ -181,7 +193,8 @@ def _main():
     Hr = extractHr(Hr_path)
 
     # TODO
-    E_below_V_nm = 0.5 # V/nm
+    #E_below_V_nm = 0.5 # V/nm
+    E_below_V_nm = 0.0
     d_A = 6.488 # Angstrom
 
     bohr_per_Angstrom = 1.889726164
@@ -189,7 +202,8 @@ def _main():
     d_bohr = bohr_per_Angstrom * d_A
     E_below_V_bohr = E_below_V_nm / (10 * bohr_per_Angstrom)
 
-    hole_density_cm2 = 8e12
+    #hole_density_cm2 = 8e12
+    hole_density_cm2 = 1e10
     hole_density_bohr2 = hole_density_cm2 / (10**8 * bohr_per_Angstrom)**2
     print("hole_density_bohr2")
     print(hole_density_bohr2)
@@ -214,23 +228,23 @@ def _main():
 
     # Use full TB model -- TODO k dot p
     H_k0s, band_indices = [], []
+    def Hfn(k0, q):
+        return Hk(q + k0, Hr, latVecs)
+
     for k0 in [Gamma_cart, K_cart, Kprime_cart]:
-        def Hfn(q):
-            return Hk(k0, Hr, latVecs)
+        H_k0s.append(partial(Hfn, k0))
 
-        H_k0s.append(Hfn)
-
-        Es, U = np.linalg.eigh(Hfn([0.0, 0.0, 0.0]))
+        Es, U = np.linalg.eigh(H_k0s[-1](np.array([0.0, 0.0, 0.0])))
         top = top_valence_indices(E_F_base, 2*args.num_layers, Es)
         band_indices.append(top)
 
     Pzs = get_layer_projections(args.num_layers)
 
-    E_F = get_Fermi_energy(H_k0s, phis_initial, Pzs, band_indices, hole_density_bohr2)
+    E_F, E0s, curvatures = get_Fermi_energy(H_k0s, phis_initial, Pzs, band_indices, hole_density_bohr2)
     print("E_F")
     print(E_F)
 
-    new_sigmas = layer_hole_density_at_E(H_k0s, phis_initial, Pzs, band_indices, E_F)
+    new_sigmas = layer_hole_density_at_E(H_k0s, phis_initial, Pzs, band_indices, E_F, E0s, curvatures)
     print("new_sigmas")
     print(new_sigmas)
 
