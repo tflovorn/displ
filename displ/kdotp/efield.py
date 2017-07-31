@@ -11,7 +11,7 @@ from displ.build.build import _get_work, band_path_labels
 from displ.pwscf.parseScf import fermi_from_scf, latVecs_from_scf, alat_from_scf
 from displ.wannier.extractHr import extractHr
 from displ.wannier.bands import Hk
-from displ.kdotp.model_weights_K import top_valence_indices
+from displ.kdotp.model_weights_K import vec_linspace, top_valence_indices
 from displ.kdotp.separability_K import get_layer_projections
 
 # Electric field below the lowest TMD layer -- E_below [V/a_Bohr]
@@ -172,6 +172,32 @@ def layer_hole_density_at_E(H_k0s, phis, Pzs, band_indices, E, E0s=None, curvatu
 
     return result
 
+def plot_H_k0_phis(H_k0s, phis, Pzs, band_indices, E_F_base):
+    qs = vec_linspace(np.array([0.0, 0.0, 0.0]), [0.3, 0.0, 0.0], 100)
+    for H_k0, band_indices_k0 in zip(H_k0_phis(H_k0s, phis, Pzs), band_indices):
+        Ekms = []
+        for q in qs:
+            Es, U = np.linalg.eigh(H_k0(q))
+            Ekms.append(Es)
+
+        Emks = []
+        for band_index in range(len(Ekms[0])):
+            Emks.append([])
+
+        for k_index in range(len(qs)):
+            for band_index in range(len(Ekms[0])):
+                Emks[band_index].append(Ekms[k_index][band_index])
+
+        for band_index, Em in enumerate(Emks):
+            if band_index in band_indices_k0:
+                plt.plot(range(len(qs)), Em, 'r-')
+            else:
+                plt.plot(range(len(qs)), Em, 'k-')
+
+        plt.axhline(E_F_base, linestyle='dashed')
+
+        plt.show()
+
 def _main():
     np.set_printoptions(threshold=np.inf)
 
@@ -206,8 +232,9 @@ def _main():
     Hr = extractHr(Hr_path)
 
     # TODO
-    #E_below_V_nm = 0.5 # V/nm
-    E_below_V_nm = 0.0
+    E_below_V_nm = 0.5 # V/nm
+    #E_below_V_nm = 1.2
+    #E_below_V_nm = 0.0
     d_A = 6.488 # Angstrom
 
     bohr_per_Angstrom = 1.889726164
@@ -215,13 +242,13 @@ def _main():
     d_bohr = bohr_per_Angstrom * d_A
     E_below_V_bohr = E_below_V_nm / (10 * bohr_per_Angstrom)
 
-    #hole_density_cm2 = 8e12
-    hole_density_cm2 = 1e10
+    hole_density_cm2 = 8e12
+    #hole_density_cm2 = 1e10
     hole_density_bohr2 = hole_density_cm2 / (10**8 * bohr_per_Angstrom)**2
     print("hole_density_bohr2")
     print(hole_density_bohr2)
 
-    epsilon_r = 1.0 # TODO relative permittivity felt in trilayer
+    epsilon_r = 10.0 # TODO relative permittivity felt in trilayer
     epsilon_0_F_m = 8.8541878e-12 # F/m = C/Vm
     epsilon_0_F_bohr = epsilon_0_F_m / (10**10 * bohr_per_Angstrom)
 
@@ -254,6 +281,8 @@ def _main():
         band_indices.append(top)
 
     Pzs = get_layer_projections(args.num_layers)
+
+    plot_H_k0_phis(H_k0s, phis_initial, Pzs, band_indices, E_F_base)
 
     E_F, E0s, curvatures = get_Fermi_energy(H_k0s, phis_initial, Pzs, band_indices, hole_density_bohr2)
     print("E_F")
