@@ -61,16 +61,29 @@ def band_curvatures(H_k0s, phis, Pzs, band_indices):
 
     [eV Bohr^2]
     '''
-    def band_energy(H_k0, n, q):
-        Es, U = np.linalg.eigh(H_k0(q))
+    def band_energy(H_k0, n, c, q):
+        q_subst = []
+        for cp in range(2):
+            if cp == c:
+                q_subst.append(q)
+            else:
+                q_subst.append(0.0)
+
+        q_subst.append(0.0)
+
+        Es, U = np.linalg.eigh(H_k0(np.array(q_subst)))
         return Es[n]
 
     result = []
     for H_k0, band_indices_k0 in zip(H_k0_phis(H_k0s, phis, Pzs), band_indices):
         result.append([])
         for n in band_indices_k0:
-            curvatures = nd.Hessian(partial(band_energy, H_k0, n))(np.array([0.0, 0.0, 0.0]))
-            result[-1].append([curvatures[0, 0], curvatures[1, 1]])
+            curvatures = []
+            for c in range(2):
+                curvatures.append(nd.Derivative(partial(band_energy, H_k0, n, c), n=2, order=16)(0.0))
+
+            print(n, curvatures)
+            result[-1].append([curvatures[0], curvatures[1]])
 
     return result
 
@@ -231,11 +244,13 @@ def _main():
     def Hfn(k0, q):
         return Hk(q + k0, Hr, latVecs)
 
-    for k0 in [Gamma_cart, K_cart, Kprime_cart]:
+    k0s = [Gamma_cart, K_cart, Kprime_cart]
+    k0_num_orbitals = [2, 3, 3]
+    for k0, num_orbitals in zip(k0s, k0_num_orbitals):
         H_k0s.append(partial(Hfn, k0))
 
         Es, U = np.linalg.eigh(H_k0s[-1](np.array([0.0, 0.0, 0.0])))
-        top = top_valence_indices(E_F_base, 2*args.num_layers, Es)
+        top = top_valence_indices(E_F_base, num_orbitals, Es)
         band_indices.append(top)
 
     Pzs = get_layer_projections(args.num_layers)
