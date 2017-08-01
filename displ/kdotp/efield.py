@@ -20,7 +20,7 @@ __epsilon_0_F_m = 8.8541878e-12 # F/m = C/Vm
 __epsilon_0_F_bohr = __epsilon_0_F_m / (10**10 * __bohr_per_Angstrom)
 __e_C = 1.60217662e-19 # C
 
-# Electric field below the lowest TMD layer -- E_below [V/a_Bohr]
+# Avg. electric field above and below the TMD multilayer -- E [V/a_Bohr]
 # Distance between W in adjacent TMD laeyers -- d [a_Bohr]
 # Total number of holes per unit area -- hole_density [a_Bohr^{-2}]
 # List of Hamiltonian functions for each relevant band maximum -- H_k0s[k0_index](q) [eV], with q given in [a_Bohr^{-1}]
@@ -213,11 +213,11 @@ def plot_H_k0_phis(H_k0s, phis, Pzs, band_indices, E_F_base):
 
         plt.show()
 
-def get_phis(sigmas, d_bohr, E_below_V_bohr, epsilon_r):
-    d_eps = d_bohr / (epsilon_r * __epsilon_0_F_bohr)
-    phis = [0.0,
-            -d_bohr * E_below_V_bohr - d_eps * sigmas[0],
-            -2 * d_bohr * E_below_V_bohr - d_eps * (2 * sigmas[0] + sigmas[1])]
+def get_phis(sigmas, d_bohr, E_V_bohr, epsilon_r):
+    d_eps = d_bohr / (2 * epsilon_r * __epsilon_0_F_bohr)
+    phis = [d_bohr * E_V_bohr - d_eps * (sigmas[1] + 2 * sigmas[2]),
+            -d_eps * (sigmas[0] + sigmas[2]),
+            -d_bohr * E_V_bohr - d_eps * (2 * sigmas[0] + sigmas[1])]
     return phis
 
 def sigma_converged(sigmas, new_sigmas, tol_abs, tol_rel):
@@ -233,7 +233,7 @@ def sigma_converged(sigmas, new_sigmas, tol_abs, tol_rel):
 
     return True
 
-def get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_density_bohr2, d_bohr, E_below_V_bohr, epsilon_r, tol_abs, tol_rel):
+def get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_density_bohr2, d_bohr, E_V_bohr, epsilon_r, tol_abs, tol_rel):
     sigmas = sigmas_initial
     new_sigmas = None
 
@@ -241,7 +241,7 @@ def get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_den
         if new_sigmas is not None:
             sigmas = new_sigmas
 
-        phis = get_phis(sigmas, d_bohr, E_below_V_bohr, epsilon_r)
+        phis = get_phis(sigmas, d_bohr, E_V_bohr, epsilon_r)
         print("phis [V]")
         print(phis)
 
@@ -296,22 +296,21 @@ def _main():
     Hr = extractHr(Hr_path)
 
     # TODO
-    #E_below_V_nm = 0.5 # V/nm
-    E_below_V_nm = 0.5
+    E_V_nm = 0.5 # V/nm
     d_A = 6.488 # Angstrom
 
     d_bohr = __bohr_per_Angstrom * d_A
-    E_below_V_bohr = E_below_V_nm / (10 * __bohr_per_Angstrom)
+    E_V_bohr = E_V_nm / (10 * __bohr_per_Angstrom)
 
-    #hole_density_cm2 = 8e12
-    #hole_density_cm2 = 1e10
-    hole_density_cm2 = 1e12
+    print("unscreened phi_3 - phi_1 [V]")
+    print(-2 * d_bohr * E_V_bohr)
+
+    hole_density_cm2 = 8e12
     hole_density_bohr2 = hole_density_cm2 / (10**8 * __bohr_per_Angstrom)**2
     print("hole_density_bohr2")
     print(hole_density_bohr2)
 
     epsilon_r = 10.0 # TODO relative permittivity felt in trilayer
-
 
     # Choose initial potential assuming holes are distributed uniformally.
     sigma_layer_initial = (1/3) * __e_C * hole_density_bohr2
@@ -342,7 +341,7 @@ def _main():
     tol_abs = 1e-6 * sum(sigmas_initial)
     tol_rel = 1e-6
 
-    converged_sigma = get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_density_bohr2, d_bohr, E_below_V_bohr, epsilon_r, tol_abs, tol_rel)
+    converged_sigma = get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_density_bohr2, d_bohr, E_V_bohr, epsilon_r, tol_abs, tol_rel)
 
 if __name__ == "__main__":
     _main()
