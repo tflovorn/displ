@@ -3,6 +3,7 @@ import argparse
 import os
 import itertools
 from functools import partial
+from multiprocessing import Pool
 import numpy as np
 import numdifftools as nd
 from scipy.optimize import bisect
@@ -88,7 +89,6 @@ def band_curvatures(H_k0s, phis, Pzs, band_indices):
             for c in range(2):
                 curvatures.append(nd.Derivative(partial(band_energy, H_k0, n, c), n=2, order=16)(0.0))
 
-            print(n, curvatures)
             result[-1].append([curvatures[0], curvatures[1]])
 
     return result
@@ -118,23 +118,11 @@ def get_Fermi_energy(H_k0s, phis, Pzs, band_indices, hole_density):
     E_min = min([min(E0s_k0) for E0s_k0 in E0s])
     E_max = max([max(E0s_k0) for E0s_k0 in E0s])
 
-    print("in get_Fermi_energy got E0s = ")
-    print(E0s)
-    print(E_min, E_max)
-
     curvatures = band_curvatures(H_k0s, phis, Pzs, band_indices)
-    print("curvatures = ")
-    print(curvatures)
 
     def error_fn(E):
         band_hole_density = hole_density_at_E(E0s, curvatures, E)
-        #print("E, band_hole_density")
-        #print(E)
-        #print(band_hole_density)
         return hole_density - sum([sum(hk) for hk in band_hole_density])
-
-    print("n_h error at E_min, E_max")
-    print(error_fn(E_min), error_fn(E_max))
 
     return bisect(error_fn, E_min, E_max), E0s, curvatures
 
@@ -153,7 +141,7 @@ def get_layer_weights(H_k0s, phis, Pzs, band_indices):
 
             state = U[:, [n]]
             for Pz in Pzs:
-                weight = (state.conjugate().T @ Pz @ state)[0, 0]
+                weight = (state.conjugate().T @ Pz @ state)[0, 0].real
                 result[-1][-1].append(weight)
 
     return result
@@ -212,6 +200,7 @@ def plot_H_k0_phis(H_k0s, phis, Pzs, band_indices, E_F_base):
         plt.axhline(E_F_base, linestyle='dashed')
 
         plt.show()
+        plt.clf()
 
 def get_phis(sigmas, d_bohr, E_V_bohr, epsilon_r):
     d_eps = d_bohr / (2 * epsilon_r * __epsilon_0_F_bohr)
@@ -242,30 +231,76 @@ def get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_den
             sigmas = new_sigmas
 
         phis = get_phis(sigmas, d_bohr, E_V_bohr, epsilon_r)
-        print("phis [V]")
-        print(phis)
 
         E_F, E0s, curvatures = get_Fermi_energy(H_k0s, phis, Pzs, band_indices, hole_density_bohr2)
-        print("E_F")
-        print(E_F)
 
         new_nh, new_nh_layer_total = layer_hole_density_at_E(H_k0s, phis, Pzs, band_indices, E_F, E0s, curvatures)
-        print("new_nh")
-        print(new_nh)
-
-        print("new_nh_layer_total")
-        print(new_nh_layer_total)
-
         new_sigmas = [__e_C * n for n in new_nh_layer_total]
-        print("new_sigmas")
-        print(new_sigmas)
 
-    return new_sigmas
+    return new_nh, new_sigmas
+
+def get_H_k0s(R, Hr, latVecs, E_F_base):
+    Gamma_cart = np.array([0.0, 0.0, 0.0])
+    K_lat = np.array([1/3, 1/3, 0.0])
+    K_cart = np.dot(K_lat, R)
+    Kprime_cart = -K_cart
+
+    k0s = [Gamma_cart, K_cart, Kprime_cart]
+
+    H_k0s, band_indices = [], []
+    def Hfn(k0, q):
+        return Hk(q + k0, Hr, latVecs)
+
+    k0_num_orbitals = [2, 3, 3]
+    for k0, num_orbitals in zip(k0s, k0_num_orbitals):
+        H_k0s.append(partial(Hfn, k0))
+
+        Es, U = np.linalg.eigh(H_k0s[-1](np.array([0.0, 0.0, 0.0])))
+        top = top_valence_indices(E_F_base, num_orbitals, Es)
+        band_indices.append(top)
+
+    return H_k0s, band_indices
+
+def hole_distribution(E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial, Pzs, hole_density_bohr2, d_bohr, epsilon_r, tol_abs, tol_rel):
+    # Use full TB model -- TODO k dot p
+    # H_k0s is generated here since Hfn can't be pickled for use in multiprocessing
+    H_k0s, band_indices = get_H_k0s(R, Hr, latVecs, E_F_base)
+
+    E_V_bohr = E_V_nm / (10 * __bohr_per_Angstrom)
+
+    #print("unscreened phi_3 - phi_1 [V]")
+    #print(-2 * d_bohr * E_V_bohr)
+
+    phis_initial = get_phis(sigmas_initial, d_bohr, E_V_bohr, epsilon_r)
+    #print("phis_initial [V]")
+    #print(phis_initial)
+
+    nh_converged, sigmas_converged = get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_density_bohr2, d_bohr, E_V_bohr, epsilon_r, tol_abs, tol_rel)
+
+    #print("sigmas_converged [C/bohr^2]")
+    #print(sigmas_converged)
+
+    phis_converged = get_phis(sigmas_converged, d_bohr, E_V_bohr, epsilon_r)
+    #print("phis_converged [V]")
+    #print(phis_converged)
+
+    #print("hole distribution converged")
+    #print(nh_converged)
+
+    sum_nh = lambda nh: sum([sum(bands) for bands in nh])
+
+    nh_Gamma = sum_nh(nh_converged[0])
+    nh_K = sum_nh(nh_converged[1]) + sum_nh(nh_converged[2])
+
+    #print("fractions nh_Gamma, nh_K")
+    #print(nh_Gamma / hole_density_bohr2, nh_K / hole_density_bohr2)
+
+    return nh_Gamma, nh_K
 
 def _main():
     np.set_printoptions(threshold=np.inf)
 
-    parser = argparse.ArgumentParser("Plot band structure",
+    parser = argparse.ArgumentParser("TMD multilayer response to electric field",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("prefix", type=str,
             help="Prefix for calculation")
@@ -273,6 +308,8 @@ def _main():
             help="Subdirectory under work_base where calculation was run")
     parser.add_argument("--num_layers", type=int, default=3,
             help="Number of layers")
+    parser.add_argument("--plot_initial", action='store_true',
+            help="Plot initial band structure with max applied field, before charge convergence")
     args = parser.parse_args()
 
     if args.num_layers != 3:
@@ -287,61 +324,57 @@ def _main():
     alat_Bohr = 1.0
     R = 2 * np.pi * np.linalg.inv(latVecs.T)
 
-    Gamma_cart = np.array([0.0, 0.0, 0.0])
-    K_lat = np.array([1/3, 1/3, 0.0])
-    K_cart = np.dot(K_lat, R)
-    Kprime_cart = -K_cart
-
     Hr_path = os.path.join(wannier_dir, "{}_hr.dat".format(args.prefix))
     Hr = extractHr(Hr_path)
 
-    # TODO
-    E_V_nm = 0.5 # V/nm
     d_A = 6.488 # Angstrom
-
     d_bohr = __bohr_per_Angstrom * d_A
-    E_V_bohr = E_V_nm / (10 * __bohr_per_Angstrom)
-
-    print("unscreened phi_3 - phi_1 [V]")
-    print(-2 * d_bohr * E_V_bohr)
 
     hole_density_cm2 = 8e12
     hole_density_bohr2 = hole_density_cm2 / (10**8 * __bohr_per_Angstrom)**2
-    print("hole_density_bohr2")
-    print(hole_density_bohr2)
 
-    epsilon_r = 10.0 # TODO relative permittivity felt in trilayer
+    #print("hole_density_bohr2")
+    #print(hole_density_bohr2)
 
     # Choose initial potential assuming holes are distributed uniformally.
     sigma_layer_initial = (1/3) * __e_C * hole_density_bohr2
-    print("sigma_layer_initial [C/bohr^2]")
-    print(sigma_layer_initial)
 
     sigmas_initial = sigma_layer_initial * np.array([1.0, 1.0, 1.0])
+    #print("sigmas_initial [C/bohr^2]")
+    #print(sigmas_initial)
 
-    # Use full TB model -- TODO k dot p
-    H_k0s, band_indices = [], []
-    def Hfn(k0, q):
-        return Hk(q + k0, Hr, latVecs)
-
-    k0s = [Gamma_cart, K_cart, Kprime_cart]
-    k0_num_orbitals = [2, 3, 3]
-    for k0, num_orbitals in zip(k0s, k0_num_orbitals):
-        H_k0s.append(partial(Hfn, k0))
-
-        Es, U = np.linalg.eigh(H_k0s[-1](np.array([0.0, 0.0, 0.0])))
-        top = top_valence_indices(E_F_base, num_orbitals, Es)
-        band_indices.append(top)
+    epsilon_r = 10.0 # TODO relative permittivity felt in trilayer
 
     Pzs = get_layer_projections(args.num_layers)
 
-    #phis_initial = get_phis(sigmas_initial)
-    #plot_H_k0_phis(H_k0s, phis_initial, Pzs, band_indices, E_F_base)
+    E_V_nms = np.linspace(0.0, 0.6, 20)
+
+    if args.plot_initial:
+        E_V_bohr = E_V_nms[-1] / (10 * __bohr_per_Angstrom)
+        phis_initial_max = get_phis(sigmas_initial, d_bohr, E_V_bohr, epsilon_r)
+        plot_H_k0_phis(H_k0s, phis_initial, Pzs, band_indices, E_F_base)
 
     tol_abs = 1e-6 * sum(sigmas_initial)
     tol_rel = 1e-6
 
-    converged_sigma = get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_density_bohr2, d_bohr, E_V_bohr, epsilon_r, tol_abs, tol_rel)
+    distr_args = []
+    for E_V_nm in E_V_nms:
+        distr_args.append([E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial,
+                Pzs, hole_density_bohr2, d_bohr, epsilon_r, tol_abs, tol_rel])
+
+    with Pool() as p:
+        nhs = p.starmap(hole_distribution, distr_args)
+
+    nh_Gammas_frac, nh_Ks_frac = [], []
+    for nh_Gamma, nh_K in nhs:
+        nh_Gammas_frac.append(nh_Gamma / hole_density_bohr2)
+        nh_Ks_frac.append(nh_K / hole_density_bohr2)
+
+    # TODO add nh total note
+    plt.plot(E_V_nms, nh_Gammas_frac, 'r-', label="$\\Gamma$")
+    plt.plot(E_V_nms, nh_Ks_frac, 'b-', label="$K$")
+    plt.legend(loc=0)
+    plt.savefig("occupations_Efield.png", bbox_inches='tight', dpi=500)
 
 if __name__ == "__main__":
     _main()
