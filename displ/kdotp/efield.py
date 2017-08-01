@@ -297,6 +297,18 @@ def hole_distribution(E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial, Pzs, hol
 
     return nh_Gamma, nh_K
 
+def decimal_format(x, num_decimal):
+    num_digits_exp = int(np.floor(np.log10(abs(x))))
+    x_reduced = abs(x) / 10**num_digits_exp
+
+    x_front = str(x_reduced)[:2+num_decimal]
+
+    sgn = ""
+    if x < 0.0:
+        sgn = "-"
+
+    return sgn + x_front + " x 10$^{" + str(num_digits_exp) + "}$"
+
 def _main():
     np.set_printoptions(threshold=np.inf)
 
@@ -347,7 +359,7 @@ def _main():
 
     Pzs = get_layer_projections(args.num_layers)
 
-    E_V_nms = np.linspace(0.0, 0.6, 20)
+    E_V_nms = np.linspace(0.0, 0.6, 40)
 
     if args.plot_initial:
         E_V_bohr = E_V_nms[-1] / (10 * __bohr_per_Angstrom)
@@ -371,9 +383,16 @@ def _main():
         nh_Ks_frac.append(nh_K / hole_density_bohr2)
 
     # TODO add nh total note
+    plt.xlabel("$E$ [V/nm]")
+    plt.ylabel("Occupation fraction")
+    plt.xlim(E_V_nms[0], E_V_nms[-1])
+    plt.ylim(0.0, 1.0)
+
+    hole_density_note = "$p = $ " + decimal_format(hole_density_cm2, 1) + " cm$^{-2}$"
+
     plt.plot(E_V_nms, nh_Gammas_frac, 'r-', label="$\\Gamma$")
     plt.plot(E_V_nms, nh_Ks_frac, 'b-', label="$K$")
-    plt.legend(loc=0)
+    plt.legend(loc=0, title=hole_density_note)
     plt.savefig("occupations_Efield.png", bbox_inches='tight', dpi=500)
 
 if __name__ == "__main__":
