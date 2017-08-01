@@ -388,7 +388,7 @@ def _main():
     plt.xlim(E_V_nms[0], E_V_nms[-1])
     plt.ylim(0.0, 1.0)
 
-    hole_density_note = "$p = $ " + decimal_format(hole_density_cm2, 1) + " cm$^{-2}$"
+    hole_density_note = "$p = $" + decimal_format(hole_density_cm2, 1) + " cm$^{-2}$"
 
     plt.plot(E_V_nms, nh_Gammas_frac, 'r-', label="$\\Gamma$")
     plt.plot(E_V_nms, nh_Ks_frac, 'b-', label="$K$")
