@@ -187,8 +187,8 @@ def check_layer_weight(k0s, H_k0s, phis, Pzs, band_indices):
                     weight_near_q0 = (state_near_q0.conjugate().T @ Pz @ state_near_q0)[0, 0].real
                     weight_diff = abs(weight_q0 - weight_near_q0)
 
-                    print(k0_index, k0p_index, n, z, weight_q0, weight_near_q0, weight_diff)
-                    assert(weight_diff < 0.05)
+                    #print(k0_index, k0p_index, n, z, weight_q0, weight_near_q0, weight_diff)
+                    assert(weight_diff < 0.1)
 
 def layer_hole_density_at_E(H_k0s, phis, Pzs, band_indices, E, E0s=None, curvatures=None):
     '''n_h^A(l) [1/Bohr^2]
@@ -328,6 +328,8 @@ def hole_distribution(E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial, Pzs, hol
     #print("phis_converged [V]")
     #print(phis_converged)
 
+    check_layer_weight(k0s, H_k0s, phis_converged, Pzs, band_indices)
+
     #print("hole distribution converged")
     #print(nh_converged)
 
@@ -366,8 +368,6 @@ def _main():
             help="Number of layers")
     parser.add_argument("--plot_initial", action='store_true',
             help="Plot initial band structure with max applied field, before charge convergence")
-    parser.add_argument("--check_layer_weight", action='store_true',
-            help="Check variation of layer projection with k")
     args = parser.parse_args()
 
     if args.num_layers != 3:
@@ -404,12 +404,6 @@ def _main():
     epsilon_r = 10.0 # TODO relative permittivity felt in trilayer
 
     Pzs = get_layer_projections(args.num_layers)
-
-    if args.check_layer_weight:
-        phis_0 = np.array([0.0, 0.0, 0.0])
-        k0s, H_k0s, band_indices = get_H_k0s(R, Hr, latVecs, E_F_base)
-        check_layer_weight(k0s, H_k0s, phis_0, Pzs, band_indices)
-        return
 
     E_V_nms = np.linspace(0.0, 0.6, 40)
 
