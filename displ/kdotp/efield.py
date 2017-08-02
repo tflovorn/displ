@@ -406,11 +406,14 @@ def _main():
     #print("sigmas_initial [C/bohr^2]")
     #print(sigmas_initial)
 
-    epsilon_r = 10.0 # TODO relative permittivity felt in trilayer
+    # Dielectric constant of WSe2:
+    # Kim et al., ACS Nano 9, 4527 (2015).
+    # http://pubs.acs.org/doi/abs/10.1021/acsnano.5b01114
+    epsilon_r = 7.2
 
     Pzs = get_layer_projections(args.num_layers)
 
-    E_V_nms = np.linspace(0.0, 0.6, 40)
+    E_V_nms = np.linspace(0.0, 0.6, 42)
 
     if args.plot_initial:
         E_V_bohr = E_V_nms[-1] / (10 * __bohr_per_Angstrom)
