@@ -158,7 +158,7 @@ def get_layer_weights(H_k0s, phis, Pzs, band_indices):
 
     return result
 
-def check_layer_weight(k0s, H_k0s, phis, Pzs, band_indices):
+def check_layer_weight(k0s, H_k0s, phis, Pzs, band_indices, E_V_nm):
     '''Check that layer weight doesn't change too quickly in region around k0.
     '''
     weights_q0, weights_near_q0 = [], []
@@ -192,8 +192,8 @@ def check_layer_weight(k0s, H_k0s, phis, Pzs, band_indices):
                     weight_near_q0 = (state_near_q0.conjugate().T @ Pz @ state_near_q0)[0, 0].real
                     weight_diff = abs(weight_q0 - weight_near_q0)
 
-                    #print(k0_index, k0p_index, n, z, weight_q0, weight_near_q0, weight_diff)
-                    assert(weight_diff < 0.1)
+                    if weight_diff > 0.05 and n == max(band_indices_k0):
+                        print("WARNING: weight_diff = {} for E_V_nm = {}, k0, k0p, n, z = {}, {}, {}, {}; weight_q0, weight_near_q0 = {}, {}".format(weight_diff, E_V_nm, k0_index, k0p_index, n, z, weight_q0, weight_near_q0))
 
 def layer_hole_density_at_E(H_k0s, phis, Pzs, band_indices, E, E0s=None, curvatures=None):
     '''n_h^A(l) [1/Bohr^2]
@@ -333,7 +333,7 @@ def hole_distribution(E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial, Pzs, hol
     #print("phis_converged [V]")
     #print(phis_converged)
 
-    check_layer_weight(k0s, H_k0s, phis_converged, Pzs, band_indices)
+    check_layer_weight(k0s, H_k0s, phis_converged, Pzs, band_indices, E_V_nm)
 
     #print("hole distribution converged")
     #print(nh_converged)
