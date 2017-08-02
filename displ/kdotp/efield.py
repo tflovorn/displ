@@ -89,7 +89,12 @@ def band_curvatures(H_k0s, phis, Pzs, band_indices):
             for c in range(2):
                 curvatures.append(nd.Derivative(partial(band_energy, H_k0_phi, n, c), n=2, order=16)(0.0))
 
-            result[-1].append([curvatures[0], curvatures[1]])
+            cx, cy = curvatures[0], curvatures[1]
+            threshold = 0.05
+            if abs(cx - cy) > threshold * max(abs(cx), abs(cy)):
+                print("WARNING: cx = {}, cy = {}, relative diff = {}".format(cx, cy, abs(cx - cy) / max(abs(cx), abs(cy))))
+
+            result[-1].append([cx, cy])
 
     return result
 
@@ -107,7 +112,7 @@ def hole_density_at_E(E0s, curvatures, E):
         result.append([])
         for E0, curvature in zip(E0_k0, curvature_k0):
             cx, cy = curvature
-            val = np.sqrt(cx/cy) * (1/(4*np.pi)) * (-1/cx) * (E0 - E) * step(E0 - E)
+            val = (1/(4*np.pi)) * (-1/cx) * (E0 - E) * step(E0 - E)
             result[-1].append(val)
 
     return result
@@ -208,7 +213,7 @@ def layer_hole_density_at_E(H_k0s, phis, Pzs, band_indices, E, E0s=None, curvatu
             for z, weight in enumerate(weights_k0_n):
                 cx, cy = curvature
                 # TODO factor out part after weight, same as overall hole density
-                val = weight * np.sqrt(cx / cy) * (1/(4*np.pi)) * (-1/cx) * (E0 - E) * step(E0 - E)
+                val = weight * (1/(4*np.pi)) * (-1/cx) * (E0 - E) * step(E0 - E)
                 result[-1][-1].append(val)
 
     result_layer_total = [0.0]*len(Pzs)
