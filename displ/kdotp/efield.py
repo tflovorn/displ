@@ -21,9 +21,9 @@ __epsilon_0_F_m = 8.8541878e-12 # F/m = C/Vm
 __epsilon_0_F_bohr = __epsilon_0_F_m / (10**10 * __bohr_per_Angstrom)
 __e_C = 1.60217662e-19 # C
 
-# Avg. electric field above and below the TMD multilayer -- E [V/a_Bohr]
-# Distance between W in adjacent TMD laeyers -- d [a_Bohr]
-# Total number of holes per unit area -- hole_density [a_Bohr^{-2}]
+# Avg. electric field above and below the TMD multilayer -- E_V_bohr [V/a_Bohr]
+# Distance between W in adjacent TMD laeyers -- d_bohr [a_Bohr]
+# Total number of holes per unit area -- hole_density_bohr2 [a_Bohr^{-2}]
 # List of Hamiltonian functions for each relevant band maximum -- H_k0s[k0_index](q) [eV], with q given in [a_Bohr^{-1}]
 # List of initial guesses for electric potential on each layer -- phis [V]
 # List of projection operators onto each layer -- Pzs[layer_index] [unitless]
@@ -51,9 +51,9 @@ def energies_at_k0(H_k0s, phis, Pzs, band_indices):
     [eV]
     '''
     result = []
-    for H_k0, band_indices_k0 in zip(H_k0_phis(H_k0s, phis, Pzs), band_indices):
+    for H_k0_phi, band_indices_k0 in zip(H_k0_phis(H_k0s, phis, Pzs), band_indices):
         q0 = np.array([0.0, 0.0, 0.0])
-        Es, U = np.linalg.eigh(H_k0(q0))
+        Es, U = np.linalg.eigh(H_k0_phi(q0))
 
         E0s = [Es[n0] for n0 in band_indices_k0]
         result.append(E0s)
@@ -68,7 +68,7 @@ def band_curvatures(H_k0s, phis, Pzs, band_indices):
 
     [eV Bohr^2]
     '''
-    def band_energy(H_k0, n, c, q):
+    def band_energy(H_k0_phi, n, c, q):
         q_subst = []
         for cp in range(2):
             if cp == c:
@@ -78,16 +78,16 @@ def band_curvatures(H_k0s, phis, Pzs, band_indices):
 
         q_subst.append(0.0)
 
-        Es, U = np.linalg.eigh(H_k0(np.array(q_subst)))
+        Es, U = np.linalg.eigh(H_k0_phi(np.array(q_subst)))
         return Es[n]
 
     result = []
-    for H_k0, band_indices_k0 in zip(H_k0_phis(H_k0s, phis, Pzs), band_indices):
+    for H_k0_phi, band_indices_k0 in zip(H_k0_phis(H_k0s, phis, Pzs), band_indices):
         result.append([])
         for n in band_indices_k0:
             curvatures = []
             for c in range(2):
-                curvatures.append(nd.Derivative(partial(band_energy, H_k0, n, c), n=2, order=16)(0.0))
+                curvatures.append(nd.Derivative(partial(band_energy, H_k0_phi, n, c), n=2, order=16)(0.0))
 
             result[-1].append([curvatures[0], curvatures[1]])
 
@@ -130,11 +130,11 @@ def get_layer_weights(H_k0s, phis, Pzs, band_indices):
     '''Returns list of weight[k0_index][n0][layer_index] [unitless]
     '''
     result = []
-    for H_k0, band_indices_k0 in zip(H_k0_phis(H_k0s, phis, Pzs), band_indices):
+    for H_k0_phi, band_indices_k0 in zip(H_k0_phis(H_k0s, phis, Pzs), band_indices):
         result.append([])
 
         q0 = np.array([0.0, 0.0, 0.0])
-        Es, U = np.linalg.eigh(H_k0(q0))
+        Es, U = np.linalg.eigh(H_k0_phi(q0))
 
         for n in band_indices_k0:
             result[-1].append([])
@@ -145,6 +145,43 @@ def get_layer_weights(H_k0s, phis, Pzs, band_indices):
                 result[-1][-1].append(weight)
 
     return result
+
+def check_layer_weight(k0s, H_k0s, phis, Pzs, band_indices):
+    '''Check that layer weight doesn't change too quickly in region around k0.
+    '''
+    weights_q0, weights_near_q0 = [], []
+    for k0_index, (k0, H_k0_phi, band_indices_k0) in enumerate(zip(k0s,
+            H_k0_phis(H_k0s, phis, Pzs), band_indices)):
+        # Check 5% of distance from k0 to all other k0s.
+        # TODO - if there is only one k0, this doesn't do anything.
+        # Handle that case properly (there, need additional information
+        # to choose good distance from k0 since we aren't in reciprocal
+        # lattice units here).
+        for k0p_index in range(len(k0s)):
+            if k0p_index == k0_index:
+                continue
+
+            k0p = k0s[k0p_index]
+            frac = 0.05
+            # H_k0 expects argument near 0. near_q0 = k0 + frac*(k0p - k0) - k0
+            near_q0 = frac * (k0p - k0)
+            
+            q0 = np.array([0.0, 0.0, 0.0])
+            Es_q0, U_q0 = np.linalg.eigh(H_k0_phi(q0))
+
+            Es_near_q0, U_near_q0 = np.linalg.eigh(H_k0_phi(near_q0))
+
+            for n in band_indices_k0:
+                state_q0 = U_q0[:, [n]]
+                state_near_q0 = U_near_q0[:, [n]]
+
+                for z, Pz in enumerate(Pzs):
+                    weight_q0 = (state_q0.conjugate().T @ Pz @ state_q0)[0, 0].real
+                    weight_near_q0 = (state_near_q0.conjugate().T @ Pz @ state_near_q0)[0, 0].real
+                    weight_diff = abs(weight_q0 - weight_near_q0)
+
+                    print(k0_index, k0p_index, n, z, weight_q0, weight_near_q0, weight_diff)
+                    assert(weight_diff < 0.05)
 
 def layer_hole_density_at_E(H_k0s, phis, Pzs, band_indices, E, E0s=None, curvatures=None):
     '''n_h^A(l) [1/Bohr^2]
@@ -177,10 +214,10 @@ def layer_hole_density_at_E(H_k0s, phis, Pzs, band_indices, E, E0s=None, curvatu
 
 def plot_H_k0_phis(H_k0s, phis, Pzs, band_indices, E_F_base):
     qs = vec_linspace(np.array([0.0, 0.0, 0.0]), [0.3, 0.0, 0.0], 100)
-    for H_k0, band_indices_k0 in zip(H_k0_phis(H_k0s, phis, Pzs), band_indices):
+    for H_k0_phi, band_indices_k0 in zip(H_k0_phis(H_k0s, phis, Pzs), band_indices):
         Ekms = []
         for q in qs:
-            Es, U = np.linalg.eigh(H_k0(q))
+            Es, U = np.linalg.eigh(H_k0_phi(q))
             Ekms.append(Es)
 
         Emks = []
@@ -259,12 +296,12 @@ def get_H_k0s(R, Hr, latVecs, E_F_base):
         top = top_valence_indices(E_F_base, num_orbitals, Es)
         band_indices.append(top)
 
-    return H_k0s, band_indices
+    return k0s, H_k0s, band_indices
 
 def hole_distribution(E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial, Pzs, hole_density_bohr2, d_bohr, epsilon_r, tol_abs, tol_rel):
     # Use full TB model -- TODO k dot p
     # H_k0s is generated here since Hfn can't be pickled for use in multiprocessing
-    H_k0s, band_indices = get_H_k0s(R, Hr, latVecs, E_F_base)
+    k0s, H_k0s, band_indices = get_H_k0s(R, Hr, latVecs, E_F_base)
 
     E_V_bohr = E_V_nm / (10 * __bohr_per_Angstrom)
 
@@ -322,6 +359,8 @@ def _main():
             help="Number of layers")
     parser.add_argument("--plot_initial", action='store_true',
             help="Plot initial band structure with max applied field, before charge convergence")
+    parser.add_argument("--check_layer_weight", action='store_true',
+            help="Check variation of layer projection with k")
     args = parser.parse_args()
 
     if args.num_layers != 3:
@@ -359,12 +398,19 @@ def _main():
 
     Pzs = get_layer_projections(args.num_layers)
 
+    if args.check_layer_weight:
+        phis_0 = np.array([0.0, 0.0, 0.0])
+        k0s, H_k0s, band_indices = get_H_k0s(R, Hr, latVecs, E_F_base)
+        check_layer_weight(k0s, H_k0s, phis_0, Pzs, band_indices)
+        return
+
     E_V_nms = np.linspace(0.0, 0.6, 40)
 
     if args.plot_initial:
         E_V_bohr = E_V_nms[-1] / (10 * __bohr_per_Angstrom)
         phis_initial_max = get_phis(sigmas_initial, d_bohr, E_V_bohr, epsilon_r)
         plot_H_k0_phis(H_k0s, phis_initial, Pzs, band_indices, E_F_base)
+        return
 
     tol_abs = 1e-6 * sum(sigmas_initial)
     tol_rel = 1e-6
