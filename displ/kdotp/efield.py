@@ -115,6 +115,13 @@ def hole_density_at_E(E0s, curvatures, E):
 def get_Fermi_energy(H_k0s, phis, Pzs, band_indices, hole_density):
     E0s = energies_at_k0(H_k0s, phis, Pzs, band_indices)
 
+    # TODO - E_min choice here is not correct in general.
+    # Assumes there is a band somewhere in the supplied bands which is
+    # fully unoccupied. The right energy scale to use to choose E_min
+    # is not obvious for the k dot p model.
+    # If this assumption is wrong, shouldn't fail silently - will have
+    # error_fn(E_min) with same sign as error_fn(E_max), causing
+    # exception in bisect.
     E_min = min([min(E0s_k0) for E0s_k0 in E0s])
     E_max = max([max(E0s_k0) for E0s_k0 in E0s])
 
