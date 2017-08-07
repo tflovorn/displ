@@ -278,6 +278,9 @@ def sigma_converged(sigmas, new_sigmas, tol_abs, tol_rel):
 def get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_density_bohr2, d_bohr, E_V_bohr, epsilon_r, tol_abs, tol_rel, curvatures=None):
     sigmas = sigmas_initial
     new_sigmas = None
+    beta = 0.5
+    iter_num = 0
+    mixing_start = 4
 
     while not sigma_converged(sigmas, new_sigmas, tol_abs, tol_rel):
         if new_sigmas is not None:
@@ -288,7 +291,15 @@ def get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_den
         E_F, E0s, curvatures = get_Fermi_energy(H_k0s, phis, Pzs, band_indices, hole_density_bohr2)
 
         new_nh, new_nh_layer_total = layer_hole_density_at_E(H_k0s, phis, Pzs, band_indices, E_F, E0s, curvatures)
-        new_sigmas = [_e_C * n for n in new_nh_layer_total]
+
+        suggested_sigmas = [_e_C * n for n in new_nh_layer_total]
+
+        if iter_num >= mixing_start:
+            new_sigmas = [sigma + beta * (sigma_prime - sigma) for sigma, sigma_prime in zip(sigmas, suggested_sigmas)]
+        else:
+            new_sigmas = suggested_sigmas
+
+        iter_num += 1
 
     return new_nh, new_sigmas
 
