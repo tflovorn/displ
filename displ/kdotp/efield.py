@@ -266,15 +266,16 @@ def sigma_converged(sigmas, new_sigmas, tol_abs, tol_rel):
         return False
 
     for s, sp in zip(sigmas, new_sigmas):
-        if abs(s - sp) > tol_abs:
-            return False
+        abs_ok = abs(s - sp) < tol_abs
 
-        if abs(s - sp) > tol_rel * max(abs(s), abs(sp)):
+        rel_ok = abs(s - sp) < tol_rel * max(abs(s), abs(sp))
+
+        if not (abs_ok or rel_ok):
             return False
 
     return True
 
-def get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_density_bohr2, d_bohr, E_V_bohr, epsilon_r, tol_abs, tol_rel):
+def get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_density_bohr2, d_bohr, E_V_bohr, epsilon_r, tol_abs, tol_rel, curvatures=None):
     sigmas = sigmas_initial
     new_sigmas = None
 
