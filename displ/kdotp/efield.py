@@ -16,10 +16,10 @@ from displ.kdotp.model_weights_K import vec_linspace, top_valence_indices
 from displ.kdotp.separability_K import get_layer_projections
 
 # Constants (physical and unit relations)
-__bohr_per_Angstrom = 1.889726164
-__epsilon_0_F_m = 8.8541878e-12 # F/m = C/Vm
-__epsilon_0_F_bohr = __epsilon_0_F_m / (10**10 * __bohr_per_Angstrom)
-__e_C = 1.60217662e-19 # C
+_bohr_per_Angstrom = 1.889726164
+_epsilon_0_F_m = 8.8541878e-12 # F/m = C/Vm
+_epsilon_0_F_bohr = _epsilon_0_F_m / (10**10 * _bohr_per_Angstrom)
+_e_C = 1.60217662e-19 # C
 
 # Avg. electric field above and below the TMD multilayer -- E_V_bohr [V/a_Bohr]
 # Distance between W in adjacent TMD laeyers -- d_bohr [a_Bohr]
@@ -192,7 +192,8 @@ def check_layer_weight(k0s, H_k0s, phis, Pzs, band_indices, E_V_nm):
                     weight_near_q0 = (state_near_q0.conjugate().T @ Pz @ state_near_q0)[0, 0].real
                     weight_diff = abs(weight_q0 - weight_near_q0)
 
-                    if weight_diff > 0.05 and n == max(band_indices_k0):
+                    tolerance = 0.05
+                    if weight_diff > tolerance and n == max(band_indices_k0):
                         print("WARNING: weight_diff = {} for E_V_nm = {}, k0, k0p, n, z = {}, {}, {}, {}; weight_q0, weight_near_q0 = {}, {}".format(weight_diff, E_V_nm, k0_index, k0p_index, n, z, weight_q0, weight_near_q0))
 
 def layer_hole_density_at_E(H_k0s, phis, Pzs, band_indices, E, E0s=None, curvatures=None):
@@ -252,7 +253,7 @@ def plot_H_k0_phis(H_k0s, phis, Pzs, band_indices, E_F_base):
         plt.clf()
 
 def get_phis(sigmas, d_bohr, E_V_bohr, epsilon_r):
-    d_eps = d_bohr / (2 * epsilon_r * __epsilon_0_F_bohr)
+    d_eps = d_bohr / (2 * epsilon_r * _epsilon_0_F_bohr)
     phis = [d_bohr * E_V_bohr - d_eps * (sigmas[1] + 2 * sigmas[2]),
             -d_eps * (sigmas[0] + sigmas[2]),
             -d_bohr * E_V_bohr - d_eps * (2 * sigmas[0] + sigmas[1])]
@@ -284,7 +285,7 @@ def get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_den
         E_F, E0s, curvatures = get_Fermi_energy(H_k0s, phis, Pzs, band_indices, hole_density_bohr2)
 
         new_nh, new_nh_layer_total = layer_hole_density_at_E(H_k0s, phis, Pzs, band_indices, E_F, E0s, curvatures)
-        new_sigmas = [__e_C * n for n in new_nh_layer_total]
+        new_sigmas = [_e_C * n for n in new_nh_layer_total]
 
     return new_nh, new_sigmas
 
@@ -315,7 +316,7 @@ def hole_distribution(E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial, Pzs, hol
     # H_k0s is generated here since Hfn can't be pickled for use in multiprocessing
     k0s, H_k0s, band_indices = get_H_k0s(R, Hr, latVecs, E_F_base)
 
-    E_V_bohr = E_V_nm / (10 * __bohr_per_Angstrom)
+    E_V_bohr = E_V_nm / (10 * _bohr_per_Angstrom)
 
     #print("unscreened phi_3 - phi_1 [V]")
     #print(-2 * d_bohr * E_V_bohr)
@@ -384,23 +385,22 @@ def _main():
 
     E_F_base = fermi_from_scf(scf_path)
     latVecs = latVecs_from_scf(scf_path)
-    alat_Bohr = 1.0
     R = 2 * np.pi * np.linalg.inv(latVecs.T)
 
     Hr_path = os.path.join(wannier_dir, "{}_hr.dat".format(args.prefix))
     Hr = extractHr(Hr_path)
 
     d_A = 6.488 # Angstrom
-    d_bohr = __bohr_per_Angstrom * d_A
+    d_bohr = _bohr_per_Angstrom * d_A
 
     hole_density_cm2 = 8e12
-    hole_density_bohr2 = hole_density_cm2 / (10**8 * __bohr_per_Angstrom)**2
+    hole_density_bohr2 = hole_density_cm2 / (10**8 * _bohr_per_Angstrom)**2
 
     #print("hole_density_bohr2")
     #print(hole_density_bohr2)
 
     # Choose initial potential assuming holes are distributed uniformally.
-    sigma_layer_initial = (1/3) * __e_C * hole_density_bohr2
+    sigma_layer_initial = (1/3) * _e_C * hole_density_bohr2
 
     sigmas_initial = sigma_layer_initial * np.array([1.0, 1.0, 1.0])
     #print("sigmas_initial [C/bohr^2]")
@@ -416,7 +416,7 @@ def _main():
     E_V_nms = np.linspace(0.0, 0.6, 42)
 
     if args.plot_initial:
-        E_V_bohr = E_V_nms[-1] / (10 * __bohr_per_Angstrom)
+        E_V_bohr = E_V_nms[-1] / (10 * _bohr_per_Angstrom)
         phis_initial_max = get_phis(sigmas_initial, d_bohr, E_V_bohr, epsilon_r)
         plot_H_k0_phis(H_k0s, phis_initial, Pzs, band_indices, E_F_base)
         return
@@ -437,7 +437,6 @@ def _main():
         nh_Gammas_frac.append(nh_Gamma / hole_density_bohr2)
         nh_Ks_frac.append(nh_K / hole_density_bohr2)
 
-    # TODO add nh total note
     plt.xlabel("$E$ [V/nm]")
     plt.ylabel("Occupation fraction")
     plt.xlim(E_V_nms[0], E_V_nms[-1])

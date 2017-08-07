@@ -1,22 +1,17 @@
 from __future__ import division
 import argparse
 import os
-import itertools
 import json
 import numpy as np
 import matplotlib.pyplot as plt
-from displ.build.build import _get_work, _get_base_path, band_path_labels
+from displ.build.build import _get_work, _get_base_path
 from displ.pwscf.parseScf import fermi_from_scf, latVecs_from_scf, alat_from_scf
 from displ.wannier.extractHr import extractHr
-from displ.wannier.bands import Hk, dHk_dk, d2Hk_dk
-from displ.kdotp.linalg import nullspace
-from displ.kdotp.model_weights_K import vec_linspace, top_valence_indices
-from displ.kdotp.separability_K import get_layer_projections, get_total_orbitals
-from displ.kdotp.effective_valence_K import (layer_basis_from_dm,
-        array_with_rows, layer_Hamiltonian_0th_order, layer_Hamiltonian_ps,
-        layer_Hamiltonian_mstar_inverses, correction_Hamiltonian_0th_order,
-        correction_Hamiltonian_ps, correction_Hamiltonian_mstar_inverses,
-        correction_Hamiltonian_PQ, H_kdotp, effective_mass_band)
+from displ.wannier.bands import Hk
+from displ.kdotp.model_weights_K import top_valence_indices
+from displ.kdotp.effective_valence_K import effective_mass_band
+from displ.kdotp.separability_K import get_layer_projections
+from displ.kdotp.efield import _bohr_per_Angstrom, _e_C, hole_distribution, decimal_format
 
 def get_prefixes(global_prefix, subdir):
     base = _get_base_path(subdir)
@@ -50,11 +45,32 @@ def _main():
             help="Subdirectory under work_base where calculation was run")
     args = parser.parse_args()
 
-    Es, prefixes = get_prefixes(args.global_prefix, args.subdir)
-    print(Es)
+    E_V_nms, prefixes = get_prefixes(args.global_prefix, args.subdir)
+    print(E_V_nms)
     print(prefixes)
 
+    d_A = 6.488 # Angstrom
+    d_bohr = _bohr_per_Angstrom * d_A
+
+    hole_density_cm2 = 8e12
+    hole_density_bohr2 = hole_density_cm2 / (10**8 * _bohr_per_Angstrom)**2
+
+    sigma_layer_initial = (1/3) * _e_C * hole_density_bohr2
+
+    sigmas_initial = sigma_layer_initial * np.array([1.0, 1.0, 1.0])
+
+    # Dielectric constant of WSe2:
+    # Kim et al., ACS Nano 9, 4527 (2015).
+    # http://pubs.acs.org/doi/abs/10.1021/acsnano.5b01114
+    epsilon_r = 7.2
+
+    Pzs = get_layer_projections(3)  # TODO num_layers arg
+
+    tol_abs = 1e-6 * sum(sigmas_initial)
+    tol_rel = 1e-6
+
     Ediffs, mstar_Gammas, mstar_Ks = [], [], []
+    nh_Gammas_frac, nh_Ks_frac = [], []
 
     for prefix in prefixes:
         work = _get_work(args.subdir, prefix)
@@ -80,7 +96,7 @@ def _main():
         Es_K, U_K = np.linalg.eigh(H_TB_K)
 
         top_Gamma = top_valence_indices(E_F, 2, Es_Gamma)
-        top_K = top_valence_indices(E_F, 3, Es_Gamma) # TODO num_layers arg
+        top_K = top_valence_indices(E_F, 3, Es_Gamma)
 
         E_top_Gamma, E_top_K = Es_Gamma[top_Gamma[0]], Es_K[top_K[0]]
 
@@ -95,16 +111,36 @@ def _main():
         mstar_Gammas.append(mstar_top_Gamma[0])
         mstar_Ks.append(mstar_top_K[0])
 
-    plt.plot(Es, Ediffs, 'k.')
+        nh_Gamma, nh_K = hole_distribution(0.0, R, Hr, latVecs, E_F,
+                sigmas_initial, Pzs, hole_density_bohr2, d_bohr, epsilon_r,
+                tol_abs, tol_rel)
+
+        nh_Gammas_frac.append(nh_Gamma / hole_density_bohr2)
+        nh_Ks_frac.append(nh_K / hole_density_bohr2)
+
+    plt.plot(E_V_nms, Ediffs, 'k.')
     plt.savefig("Ediffs.png", bbox_inches='tight', dpi=500)
     plt.clf()
 
-    plt.plot(Es, mstar_Gammas, 'k.')
+    plt.plot(E_V_nms, mstar_Gammas, 'k.')
     plt.savefig("mstar_Gammas.png", bbox_inches='tight', dpi=500)
     plt.clf()
 
-    plt.plot(Es, mstar_Ks, 'k.')
+    plt.plot(E_V_nms, mstar_Ks, 'k.')
     plt.savefig("mstar_Ks.png", bbox_inches='tight', dpi=500)
+    plt.clf()
+
+    plt.xlabel("$E$ [V/nm]")
+    plt.ylabel("Occupation fraction")
+    plt.xlim(E_V_nms[0], E_V_nms[-1])
+    plt.ylim(0.0, 1.0)
+
+    hole_density_note = "$p = $" + decimal_format(hole_density_cm2, 1) + " cm$^{-2}$"
+
+    plt.plot(E_V_nms, nh_Gammas_frac, 'r-', label="$\\Gamma$")
+    plt.plot(E_V_nms, nh_Ks_frac, 'b-', label="$K$")
+    plt.legend(loc=0, title=hole_density_note)
+    plt.savefig("occupations_dft_Efield.png", bbox_inches='tight', dpi=500)
     plt.clf()
 
 if __name__ == "__main__":
