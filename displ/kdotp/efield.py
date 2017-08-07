@@ -112,7 +112,8 @@ def hole_density_at_E(E0s, curvatures, E):
         result.append([])
         for E0, curvature in zip(E0_k0, curvature_k0):
             cx, cy = curvature
-            val = (1/(4*np.pi)) * (-1/cx) * (E0 - E) * step(E0 - E)
+            mass_term = 1/(-cx/2)
+            val = (1/(4*np.pi)) * mass_term * (E0 - E) * step(E0 - E)
             result[-1].append(val)
 
     return result
@@ -214,7 +215,8 @@ def layer_hole_density_at_E(H_k0s, phis, Pzs, band_indices, E, E0s=None, curvatu
             for z, weight in enumerate(weights_k0_n):
                 cx, cy = curvature
                 # TODO factor out part after weight, same as overall hole density
-                val = weight * (1/(4*np.pi)) * (-1/cx) * (E0 - E) * step(E0 - E)
+                mass_term = 1/(-cx/2)
+                val = weight * (1/(4*np.pi)) * mass_term * (E0 - E) * step(E0 - E)
                 result[-1][-1].append(val)
 
     result_layer_total = [0.0]*len(Pzs)
