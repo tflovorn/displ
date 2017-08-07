@@ -118,7 +118,7 @@ def hole_density_at_E(E0s, curvatures, E):
 
     return result
 
-def get_Fermi_energy(H_k0s, phis, Pzs, band_indices, hole_density):
+def get_Fermi_energy(H_k0s, phis, Pzs, band_indices, hole_density, curvatures=None):
     E0s = energies_at_k0(H_k0s, phis, Pzs, band_indices)
 
     # TODO - E_min choice here is not correct in general.
@@ -131,7 +131,8 @@ def get_Fermi_energy(H_k0s, phis, Pzs, band_indices, hole_density):
     E_min = min([min(E0s_k0) for E0s_k0 in E0s])
     E_max = max([max(E0s_k0) for E0s_k0 in E0s])
 
-    curvatures = band_curvatures(H_k0s, phis, Pzs, band_indices)
+    if curvatures is None:
+        curvatures = band_curvatures(H_k0s, phis, Pzs, band_indices)
 
     def error_fn(E):
         band_hole_density = hole_density_at_E(E0s, curvatures, E)
@@ -288,7 +289,7 @@ def get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_den
 
         phis = get_phis(sigmas, d_bohr, E_V_bohr, epsilon_r)
 
-        E_F, E0s, curvatures = get_Fermi_energy(H_k0s, phis, Pzs, band_indices, hole_density_bohr2)
+        E_F, E0s, curvatures = get_Fermi_energy(H_k0s, phis, Pzs, band_indices, hole_density_bohr2, curvatures)
 
         new_nh, new_nh_layer_total = layer_hole_density_at_E(H_k0s, phis, Pzs, band_indices, E_F, E0s, curvatures)
 
@@ -325,7 +326,7 @@ def get_H_k0s(R, Hr, latVecs, E_F_base):
 
     return k0s, H_k0s, band_indices
 
-def hole_distribution(E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial, Pzs, hole_density_bohr2, d_bohr, epsilon_r, tol_abs, tol_rel):
+def hole_distribution(E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial, Pzs, hole_density_bohr2, d_bohr, epsilon_r, tol_abs, tol_rel, initial_mass):
     # Use full TB model -- TODO k dot p
     # H_k0s is generated here since Hfn can't be pickled for use in multiprocessing
     k0s, H_k0s, band_indices = get_H_k0s(R, Hr, latVecs, E_F_base)
@@ -335,11 +336,17 @@ def hole_distribution(E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial, Pzs, hol
     #print("unscreened phi_3 - phi_1 [V]")
     #print(-2 * d_bohr * E_V_bohr)
 
+    if initial_mass:
+        phi_no_E_no_p = [0.0, 0.0, 0.0]
+        curvatures = band_curvatures(H_k0s, phi_no_E_no_p, Pzs, band_indices)
+    else:
+        curvatures = None
+
     phis_initial = get_phis(sigmas_initial, d_bohr, E_V_bohr, epsilon_r)
     #print("phis_initial [V]")
     #print(phis_initial)
 
-    nh_converged, sigmas_converged = get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_density_bohr2, d_bohr, E_V_bohr, epsilon_r, tol_abs, tol_rel)
+    nh_converged, sigmas_converged = get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_density_bohr2, d_bohr, E_V_bohr, epsilon_r, tol_abs, tol_rel, curvatures)
 
     #print("sigmas_converged [C/bohr^2]")
     #print(sigmas_converged)
@@ -386,6 +393,8 @@ def _main():
             help="Subdirectory under work_base where calculation was run")
     parser.add_argument("--num_layers", type=int, default=3,
             help="Number of layers")
+    parser.add_argument("--initial_mass", action='store_true',
+            help="Use effective mass at E_perp = 0, p = 0 instead of recalculating for each phi")
     parser.add_argument("--plot_initial", action='store_true',
             help="Plot initial band structure with max applied field, before charge convergence")
     args = parser.parse_args()
@@ -441,7 +450,7 @@ def _main():
     distr_args = []
     for E_V_nm in E_V_nms:
         distr_args.append([E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial,
-                Pzs, hole_density_bohr2, d_bohr, epsilon_r, tol_abs, tol_rel])
+                Pzs, hole_density_bohr2, d_bohr, epsilon_r, tol_abs, tol_rel, args.initial_mass])
 
     with Pool() as p:
         nhs = p.starmap(hole_distribution, distr_args)
