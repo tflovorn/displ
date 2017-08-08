@@ -326,7 +326,7 @@ def get_H_k0s(R, Hr, latVecs, E_F_base):
 
     return k0s, H_k0s, band_indices
 
-def hole_distribution(E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial, Pzs, hole_density_bohr2, d_bohr, epsilon_r, tol_abs, tol_rel, initial_mass):
+def hole_distribution(E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial, Pzs, hole_density_bohr2, d_bohr, epsilon_r, tol_abs, tol_rel, initial_mass=False):
     # Use full TB model -- TODO k dot p
     # H_k0s is generated here since Hfn can't be pickled for use in multiprocessing
     k0s, H_k0s, band_indices = get_H_k0s(R, Hr, latVecs, E_F_base)
