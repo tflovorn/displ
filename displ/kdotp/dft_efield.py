@@ -118,18 +118,34 @@ def _main():
         nh_Gammas_frac.append(nh_Gamma / hole_density_bohr2)
         nh_Ks_frac.append(nh_K / hole_density_bohr2)
 
+    # Top of valence band shift
+    plt.xlabel("$E$ [V/nm]")
+    plt.ylabel("$E_{\\Gamma} - E_K$ [eV]")
+    plt.xlim(E_V_nms[0], E_V_nms[-1])
+
     plt.plot(E_V_nms, Ediffs, 'k.')
     plt.savefig("Ediffs.png", bbox_inches='tight', dpi=500)
     plt.clf()
+
+    # Gamma effective mass
+    plt.xlabel("$E$ [V/nm]")
+    plt.ylabel("$m^*_{\\Gamma} / m_e$")
+    plt.xlim(E_V_nms[0], E_V_nms[-1])
 
     plt.plot(E_V_nms, mstar_Gammas, 'k.')
     plt.savefig("mstar_Gammas.png", bbox_inches='tight', dpi=500)
     plt.clf()
 
+    # K effective mass
+    plt.xlabel("$E$ [V/nm]")
+    plt.ylabel("$m^*_K / m_e$")
+    plt.xlim(E_V_nms[0], E_V_nms[-1])
+
     plt.plot(E_V_nms, mstar_Ks, 'k.')
     plt.savefig("mstar_Ks.png", bbox_inches='tight', dpi=500)
     plt.clf()
 
+    # Band occupations
     plt.xlabel("$E$ [V/nm]")
     plt.ylabel("Occupation fraction")
     plt.xlim(E_V_nms[0], E_V_nms[-1])
