@@ -87,8 +87,9 @@ def _control(calc_type, pseudo_dir, prefix):
     nl.append("    wf_collect=.true.,")
     nl.append("    pseudo_dir='{}',".format(pseudo_dir))
     nl.append("    outdir='./',")
-    nl.append("    prefix='{}',".format(prefix))
-    nl.append("    tefield=.true.")
+    nl.append("    tefield=.true.,")
+    nl.append("    dipfield=.true.,")
+    nl.append("    prefix='{}'".format(prefix))
     nl.append(" /")
     return "\n".join(nl)
 
@@ -108,6 +109,9 @@ def _system(ase_system, calc_type, config):
     nl.append("    emaxpos={},".format(str(config["emaxpos"])))
     nl.append("    eopreg={},".format(str(config["eopreg"])))
     nl.append("    eamp={},".format(str(config["eamp"])))
+
+    if config["tot_charge"] is not None:
+        nl.append("    tot_charge={},".format(str(config["tot_charge"])))
 
     if config["soc"]:
         nl.append("    noncolin=.true.,")
