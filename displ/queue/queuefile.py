@@ -88,7 +88,10 @@ def _write_queuefile_ls5(config):
         qf.append("cd bands")
         qf.append("ibrun tacc_affinity pw.x -nk {} -input {}.bands.in > bands.out".format(nk, prefix))
         if config["wannier"]:
-            qf.append("cd ../wannier")
+            qf.append("cd ..")
+            qf.append("mkdir -p scf/{}.save".format(prefix))
+            qf.append("cp wannier/{}.save/data-file.xml scf/{}.save/data-file.xml".format(prefix, prefix))
+            qf.append("cd wannier")
             qf.append("ibrun tacc_affinity pw.x -nk {} -input {}.nscf.in > nscf.out".format(nk, prefix))
     elif config["calc"] == "pw_post":
         qf.append("cd ../bands")
