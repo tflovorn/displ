@@ -255,11 +255,18 @@ def plot_H_k0_phis(H_k0s, phis, Pzs, band_indices, E_F_base):
         plt.show()
         plt.clf()
 
-def get_phis(sigmas, d_bohr, E_V_bohr, epsilon_r):
+def get_phis(sigmas, d_bohr, E_V_bohr, epsilon_r, screened):
     d_eps = d_bohr / (2 * epsilon_r * _epsilon_0_F_bohr)
-    phis = [d_bohr * E_V_bohr - d_eps * (sigmas[1] + 2 * sigmas[2]),
-            -d_eps * (sigmas[0] + sigmas[2]),
-            -d_bohr * E_V_bohr - d_eps * (2 * sigmas[0] + sigmas[1])]
+
+    if screened:
+        phis = [d_bohr * E_V_bohr - d_eps * (sigmas[1] + 2 * sigmas[2]),
+                -d_eps * (sigmas[0] + sigmas[2]),
+                -d_bohr * E_V_bohr - d_eps * (2 * sigmas[0] + sigmas[1])]
+    else:
+        phis = [d_bohr * E_V_bohr,
+                0.0,
+                -d_bohr * E_V_bohr]
+
     return phis
 
 def sigma_converged(sigmas, new_sigmas, tol_abs, tol_rel):
@@ -276,7 +283,7 @@ def sigma_converged(sigmas, new_sigmas, tol_abs, tol_rel):
 
     return True
 
-def get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_density_bohr2, d_bohr, E_V_bohr, epsilon_r, tol_abs, tol_rel, curvatures=None):
+def get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_density_bohr2, d_bohr, E_V_bohr, epsilon_r, tol_abs, tol_rel, curvatures=None, screened=True):
     sigmas = sigmas_initial
     new_sigmas = None
     beta = 0.5
@@ -287,7 +294,7 @@ def get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_den
         if new_sigmas is not None:
             sigmas = new_sigmas
 
-        phis = get_phis(sigmas, d_bohr, E_V_bohr, epsilon_r)
+        phis = get_phis(sigmas, d_bohr, E_V_bohr, epsilon_r, screened)
 
         E_F, E0s, curvatures = get_Fermi_energy(H_k0s, phis, Pzs, band_indices, hole_density_bohr2, curvatures)
 
@@ -326,7 +333,7 @@ def get_H_k0s(R, Hr, latVecs, E_F_base):
 
     return k0s, H_k0s, band_indices
 
-def hole_distribution(E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial, Pzs, hole_density_bohr2, d_bohr, epsilon_r, tol_abs, tol_rel, initial_mass=False):
+def hole_distribution(E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial, Pzs, hole_density_bohr2, d_bohr, epsilon_r, tol_abs, tol_rel, initial_mass=False, screened=True):
     # Use full TB model -- TODO k dot p
     # H_k0s is generated here since Hfn can't be pickled for use in multiprocessing
     k0s, H_k0s, band_indices = get_H_k0s(R, Hr, latVecs, E_F_base)
@@ -342,18 +349,28 @@ def hole_distribution(E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial, Pzs, hol
     else:
         curvatures = None
 
-    phis_initial = get_phis(sigmas_initial, d_bohr, E_V_bohr, epsilon_r)
+    phis_initial = get_phis(sigmas_initial, d_bohr, E_V_bohr, epsilon_r, screened)
     #print("phis_initial [V]")
     #print(phis_initial)
 
-    nh_converged, sigmas_converged = get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_density_bohr2, d_bohr, E_V_bohr, epsilon_r, tol_abs, tol_rel, curvatures)
+    nh_converged, sigmas_converged = get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_density_bohr2, d_bohr, E_V_bohr, epsilon_r, tol_abs, tol_rel, curvatures, screened)
 
     #print("sigmas_converged [C/bohr^2]")
     #print(sigmas_converged)
 
-    phis_converged = get_phis(sigmas_converged, d_bohr, E_V_bohr, epsilon_r)
+    phis_converged = get_phis(sigmas_converged, d_bohr, E_V_bohr, epsilon_r, screened)
     #print("phis_converged [V]")
     #print(phis_converged)
+
+    E_converged = []
+    for H_k0_phi, band_indices_k0 in zip(H_k0_phis(H_k0s, phis_converged, Pzs), band_indices):
+        H = H_k0_phi([0.0, 0.0, 0.0])
+        Es, U = np.linalg.eigh(H)
+
+        E_converged.append([Es[m] for m in band_indices_k0])
+
+    E_Gamma = E_converged[0][0]
+    E_K = E_converged[1][0]
 
     check_layer_weight(k0s, H_k0s, phis_converged, Pzs, band_indices, E_V_nm)
 
@@ -368,7 +385,7 @@ def hole_distribution(E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial, Pzs, hol
     #print("fractions nh_Gamma, nh_K")
     #print(nh_Gamma / hole_density_bohr2, nh_K / hole_density_bohr2)
 
-    return nh_Gamma, nh_K
+    return nh_Gamma, nh_K, E_Gamma, E_K
 
 def decimal_format(x, num_decimal):
     num_digits_exp = int(np.floor(np.log10(abs(x))))
@@ -393,6 +410,10 @@ def _main():
             help="Subdirectory under work_base where calculation was run")
     parser.add_argument("--num_layers", type=int, default=3,
             help="Number of layers")
+    parser.add_argument("--holes", type=float, default=8e12,
+            help="Hole concentration [cm^{-2}]")
+    parser.add_argument("--screened", action='store_true',
+            help="Include screening by holes")
     parser.add_argument("--initial_mass", action='store_true',
             help="Use effective mass at E_perp = 0, p = 0 instead of recalculating for each phi")
     parser.add_argument("--plot_initial", action='store_true',
@@ -416,7 +437,7 @@ def _main():
     d_A = 6.488 # Angstrom
     d_bohr = _bohr_per_Angstrom * d_A
 
-    hole_density_cm2 = 8e12
+    hole_density_cm2 = args.holes
     hole_density_bohr2 = hole_density_cm2 / (10**8 * _bohr_per_Angstrom)**2
 
     #print("hole_density_bohr2")
@@ -440,37 +461,115 @@ def _main():
 
     if args.plot_initial:
         E_V_bohr = E_V_nms[-1] / (10 * _bohr_per_Angstrom)
-        phis_initial_max = get_phis(sigmas_initial, d_bohr, E_V_bohr, epsilon_r)
+        phis_initial_max = get_phis(sigmas_initial, d_bohr, E_V_bohr, epsilon_r, args.screened)
         plot_H_k0_phis(H_k0s, phis_initial, Pzs, band_indices, E_F_base)
         return
 
-    tol_abs = 1e-6 * sum(sigmas_initial)
+    if hole_density_cm2 > 0.0:
+        tol_abs = 1e-6 * sum(sigmas_initial)
+    else:
+        tol_abs = 1e-12 * _e_C
+
     tol_rel = 1e-6
 
     distr_args = []
     for E_V_nm in E_V_nms:
         distr_args.append([E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial,
-                Pzs, hole_density_bohr2, d_bohr, epsilon_r, tol_abs, tol_rel, args.initial_mass])
+                Pzs, hole_density_bohr2, d_bohr, epsilon_r, tol_abs, tol_rel, args.initial_mass, args.screened])
 
     with Pool() as p:
-        nhs = p.starmap(hole_distribution, distr_args)
+        nh_Es = p.starmap(hole_distribution, distr_args)
 
-    nh_Gammas_frac, nh_Ks_frac = [], []
-    for nh_Gamma, nh_K in nhs:
-        nh_Gammas_frac.append(nh_Gamma / hole_density_bohr2)
-        nh_Ks_frac.append(nh_K / hole_density_bohr2)
+    E_Gamma_0 = nh_Es[0][2]
+    E_K_0 = nh_Es[0][3]
 
+    nh_Gammas_frac, nh_Ks_frac, E_Gammas, E_Ks, E_Gamma_Ks = [], [], [], [], []
+    E_Gamma_steps, E_K_steps, E_Gamma_d2s, E_K_d2s = [], [], [], []
+    for E_index, (nh_Gamma, nh_K, E_Gamma, E_K) in enumerate(nh_Es):
+        if hole_density_bohr2 > 0.0:
+            nh_Gammas_frac.append(nh_Gamma / hole_density_bohr2)
+            nh_Ks_frac.append(nh_K / hole_density_bohr2)
+
+        E_Gammas.append(E_Gamma - E_Gamma_0)
+        E_Ks.append(E_K - E_K_0)
+        E_Gamma_Ks.append(E_Gamma - E_K)
+
+        if E_index > 0:
+            last_E_Gamma = nh_Es[E_index - 1][2]
+            last_E_K = nh_Es[E_index - 1][3]
+            delta_Eperp = E_V_nms[1] - E_V_nms[0]
+
+            E_Gamma_steps.append((E_Gamma - last_E_Gamma) / delta_Eperp)
+            E_K_steps.append((E_K - last_E_K) / delta_Eperp)
+
+            if E_index > 1:
+                bl_E_Gamma = nh_Es[E_index - 2][2]
+                bl_E_K = nh_Es[E_index - 2][3]
+
+                E_Gamma_d2s.append((E_Gamma - 2*last_E_Gamma + bl_E_Gamma) / delta_Eperp**2)
+                E_K_d2s.append((E_K - 2*last_E_K + bl_E_K) / delta_Eperp**2)
+
+    if hole_density_cm2 > 0.0:
+        hole_density_note = "$p = $" + decimal_format(hole_density_cm2, 1) + " cm$^{-2}$"
+    else:
+        hole_density_note = ""
+
+    if hole_density_bohr2 > 0.0:
+        # Hole concentration
+        plt.xlabel("$E$ [V/nm]")
+        plt.ylabel("Occupation fraction")
+        plt.xlim(E_V_nms[0], E_V_nms[-1])
+        plt.ylim(0.0, 1.0)
+
+        plt.plot(E_V_nms, nh_Gammas_frac, 'r-', label="$\\Gamma$")
+        plt.plot(E_V_nms, nh_Ks_frac, 'b-', label="$K$")
+        plt.legend(loc=0, title=hole_density_note)
+        plt.savefig("occupations_Efield.png", bbox_inches='tight', dpi=500)
+        plt.clf()
+
+    # E_K - E_K(E = 0); E_Gamma - E_Gamma(E = 0)
     plt.xlabel("$E$ [V/nm]")
-    plt.ylabel("Occupation fraction")
+    plt.ylabel("Energy shift [eV]")
     plt.xlim(E_V_nms[0], E_V_nms[-1])
-    plt.ylim(0.0, 1.0)
 
-    hole_density_note = "$p = $" + decimal_format(hole_density_cm2, 1) + " cm$^{-2}$"
-
-    plt.plot(E_V_nms, nh_Gammas_frac, 'r-', label="$\\Gamma$")
-    plt.plot(E_V_nms, nh_Ks_frac, 'b-', label="$K$")
+    plt.plot(E_V_nms, E_Gammas, 'r-', label="$E_{\\Gamma} - E_{\\Gamma}(E = 0)$")
+    plt.plot(E_V_nms, E_Ks, 'b-', label="$E_K - E_K(E = 0)$")
     plt.legend(loc=0, title=hole_density_note)
-    plt.savefig("occupations_Efield.png", bbox_inches='tight', dpi=500)
+    plt.savefig("energy_shifts_Efield.png", bbox_inches='tight', dpi=500)
+    plt.clf()
+
+    # E_Gamma - E_K
+    plt.xlabel("$E$ [V/nm]")
+    plt.ylabel("$E_{\\Gamma} - E_K$ [eV]")
+    plt.xlim(E_V_nms[0], E_V_nms[-1])
+
+    plt.title(hole_density_note)
+
+    plt.plot(E_V_nms, E_Gamma_Ks, 'r-')
+    plt.savefig("Ediffs_Efield.png", bbox_inches='tight', dpi=500)
+    plt.clf()
+
+    # d E_K / dE ; dE_Gamma / dE
+    plt.xlabel("$E$ [V/nm]")
+    plt.ylabel("Rate of energy change [eV/(V/nm)]")
+    plt.xlim(E_V_nms[0], E_V_nms[-1])
+
+    plt.plot(E_V_nms[1:], E_Gamma_steps, 'r-', label="$dE_{\\Gamma}/dE$")
+    plt.plot(E_V_nms[1:], E_K_steps, 'b-', label="$dE_{K}/dE$")
+    plt.legend(loc=0, title=hole_density_note)
+    plt.savefig("energy_steps_Efield.png", bbox_inches='tight', dpi=500)
+    plt.clf()
+
+    # d^2 E_K / dE^2 ; d^2 E_Gamma / dE^2
+    plt.xlabel("$E$ [V/nm]")
+    plt.ylabel("Second derivative of energy change [eV/(V/nm)$^2$]")
+    plt.xlim(E_V_nms[0], E_V_nms[-1])
+
+    plt.plot(E_V_nms[2:], E_Gamma_d2s, 'r-', label="$d^2 E_{\\Gamma}/dE^2$")
+    plt.plot(E_V_nms[2:], E_K_d2s, 'b-', label="$d^2 E_{K}/dE^2$")
+    plt.legend(loc=0, title=hole_density_note)
+    plt.savefig("energy_d2s_Efield.png", bbox_inches='tight', dpi=500)
+    plt.clf()
 
 if __name__ == "__main__":
     _main()
