@@ -259,13 +259,13 @@ def get_phis(sigmas, d_bohr, E_V_bohr, epsilon_r, screened):
     d_eps = d_bohr / (2 * epsilon_r * _epsilon_0_F_bohr)
 
     if screened:
-        phis = [d_bohr * E_V_bohr - d_eps * (sigmas[1] + 2 * sigmas[2]),
+        phis = [d_bohr * E_V_bohr / epsilon_r - d_eps * (sigmas[1] + 2 * sigmas[2]),
                 -d_eps * (sigmas[0] + sigmas[2]),
-                -d_bohr * E_V_bohr - d_eps * (2 * sigmas[0] + sigmas[1])]
+                -d_bohr * E_V_bohr / epsilon_r - d_eps * (2 * sigmas[0] + sigmas[1])]
     else:
-        phis = [d_bohr * E_V_bohr,
+        phis = [d_bohr * E_V_bohr / epsilon_r,
                 0.0,
-                -d_bohr * E_V_bohr]
+                -d_bohr * E_V_bohr / epsilon_r]
 
     return phis
 
@@ -457,7 +457,7 @@ def _main():
 
     Pzs = get_layer_projections(args.num_layers)
 
-    E_V_nms = np.linspace(0.0, 0.6, 42)
+    E_V_nms = np.linspace(0.0, 1.2, 84)
 
     if args.plot_initial:
         E_V_bohr = E_V_nms[-1] / (10 * _bohr_per_Angstrom)
