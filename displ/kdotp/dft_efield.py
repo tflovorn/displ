@@ -2,6 +2,7 @@ from __future__ import division
 import argparse
 import os
 import json
+from multiprocessing import Pool
 import numpy as np
 import matplotlib.pyplot as plt
 from displ.build.build import _get_work, _get_base_path
@@ -33,6 +34,81 @@ def get_prefixes(global_prefix, subdir):
         prefixes.append(prefix)
 
     return Es, prefixes
+
+def transpose_lists(x_ijs):
+    x_jis = []
+    for j in range(len(x_ijs[0])):
+        x_jis.append([])
+
+    for x_js in x_ijs:
+        for j, x in enumerate(x_js):
+            x_jis[j].append(x)
+
+    return x_jis
+
+def get_occupations(prefix, subdir, screened, d_bohr, hole_density_bohr2, sigmas_initial, epsilon_r):
+    work = _get_work(subdir, prefix)
+    wannier_dir = os.path.join(work, "wannier")
+    scf_path = os.path.join(wannier_dir, "scf.out")
+
+    E_F = fermi_from_scf(scf_path)
+    latVecs = latVecs_from_scf(scf_path)
+    alat_Bohr = 1.0
+    R = 2 * np.pi * np.linalg.inv(latVecs.T)
+
+    Gamma_cart = np.array([0.0, 0.0, 0.0])
+    K_lat = np.array([1/3, 1/3, 0.0])
+    K_cart = np.dot(K_lat, R)
+
+    Hr_path = os.path.join(wannier_dir, "{}_hr.dat".format(prefix))
+    Hr = extractHr(Hr_path)
+
+    H_TB_Gamma = Hk(Gamma_cart, Hr, latVecs)
+    Es_Gamma, U_Gamma = np.linalg.eigh(H_TB_Gamma)
+
+    H_TB_K = Hk(K_cart, Hr, latVecs)
+    Es_K, U_K = np.linalg.eigh(H_TB_K)
+
+    top_Gamma = top_valence_indices(E_F, 2, Es_Gamma)
+    top_K = top_valence_indices(E_F, 3, Es_Gamma)
+    assert(top_Gamma == [41, 40])
+    assert(top_K == [41, 40, 39])
+
+    E_top_Gamma, E_top_K = Es_Gamma[top_Gamma[0]], Es_K[top_K[0]]
+
+    Ediff = E_top_Gamma - E_top_K
+
+    def Hfn(k):
+        return Hk(k, Hr, latVecs)
+
+    mstar_top_Gamma = effective_mass_band(Hfn, Gamma_cart, top_Gamma[0], alat_Bohr)
+    mstar_top_K = effective_mass_band(Hfn, K_cart, top_K[0], alat_Bohr)
+
+    mstar_Gamma = mstar_top_Gamma[0]
+    mstar_K = mstar_top_K[0]
+
+    num_layers = 3
+    Pzs = get_layer_projections(num_layers)
+
+    if hole_density_bohr2 > 0.0:
+        tol_abs = 1e-6 * sum(sigmas_initial)
+    else:
+        tol_abs = 1e-12 * _e_C
+
+    tol_rel = 1e-6
+
+    nh_Gamma, nh_K, E_Gamma, E_K = hole_distribution(0.0, R, Hr, latVecs, E_F,
+            sigmas_initial, Pzs, hole_density_bohr2, d_bohr, epsilon_r,
+            tol_abs, tol_rel, screened=screened)
+
+    if hole_density_bohr2 > 0.0:
+        nh_Gamma_frac = nh_Gamma / hole_density_bohr2
+        nh_K_frac = nh_K / hole_density_bohr2
+    else:
+        nh_Gamma_frac = 0.0
+        nh_K_frac = 0.0
+
+    return Ediff, mstar_Gamma, mstar_K, nh_Gamma_frac, nh_K_frac, E_Gamma, E_K
 
 def _main():
     np.set_printoptions(threshold=np.inf)
@@ -68,71 +144,18 @@ def _main():
     # http://pubs.acs.org/doi/abs/10.1021/acsnano.5b01114
     epsilon_r = 7.2
 
-    Pzs = get_layer_projections(3)  # TODO num_layers arg
+    # Effective dielectric constant from DFT (LDA).
+    # avg(K^high_{top - bottom}, Gamma_{top - bottom})
+    #epsilon_r = 7.87
 
-    if hole_density_cm2 > 0.0:
-        tol_abs = 1e-6 * sum(sigmas_initial)
-    else:
-        tol_abs = 1e-12 * _e_C
+    occ_args = [[prefix, args.subdir, args.screened, d_bohr, hole_density_bohr2,
+            sigmas_initial, epsilon_r] for prefix in prefixes]
 
-    tol_rel = 1e-6
+    with Pool() as p:
+        result = p.starmap(get_occupations, occ_args)
 
-    Ediffs, mstar_Gammas, mstar_Ks = [], [], []
-    nh_Gammas_frac, nh_Ks_frac = [], []
-    E_Gammas, E_Ks = [], []
-
-    for prefix in prefixes:
-        print(prefix)
-        work = _get_work(args.subdir, prefix)
-        wannier_dir = os.path.join(work, "wannier")
-        scf_path = os.path.join(wannier_dir, "scf.out")
-
-        E_F = fermi_from_scf(scf_path)
-        latVecs = latVecs_from_scf(scf_path)
-        alat_Bohr = 1.0
-        R = 2 * np.pi * np.linalg.inv(latVecs.T)
-
-        Gamma_cart = np.array([0.0, 0.0, 0.0])
-        K_lat = np.array([1/3, 1/3, 0.0])
-        K_cart = np.dot(K_lat, R)
-
-        Hr_path = os.path.join(wannier_dir, "{}_hr.dat".format(prefix))
-        Hr = extractHr(Hr_path)
-
-        H_TB_Gamma = Hk(Gamma_cart, Hr, latVecs)
-        Es_Gamma, U_Gamma = np.linalg.eigh(H_TB_Gamma)
-
-        H_TB_K = Hk(K_cart, Hr, latVecs)
-        Es_K, U_K = np.linalg.eigh(H_TB_K)
-
-        top_Gamma = top_valence_indices(E_F, 2, Es_Gamma)
-        top_K = top_valence_indices(E_F, 3, Es_Gamma)
-        assert(top_Gamma == [41, 40])
-        assert(top_K == [41, 40, 39])
-
-        E_top_Gamma, E_top_K = Es_Gamma[top_Gamma[0]], Es_K[top_K[0]]
-
-        Ediffs.append(E_top_Gamma - E_top_K)
-
-        def Hfn(k):
-            return Hk(k, Hr, latVecs)
-
-        mstar_top_Gamma = effective_mass_band(Hfn, Gamma_cart, top_Gamma[0], alat_Bohr)
-        mstar_top_K = effective_mass_band(Hfn, K_cart, top_K[0], alat_Bohr)
-
-        mstar_Gammas.append(mstar_top_Gamma[0])
-        mstar_Ks.append(mstar_top_K[0])
-
-        nh_Gamma, nh_K, E_Gamma, E_K = hole_distribution(0.0, R, Hr, latVecs, E_F,
-                sigmas_initial, Pzs, hole_density_bohr2, d_bohr, epsilon_r,
-                tol_abs, tol_rel, screened=args.screened)
-
-        if hole_density_bohr2 > 0.0:
-            nh_Gammas_frac.append(nh_Gamma / hole_density_bohr2)
-            nh_Ks_frac.append(nh_K / hole_density_bohr2)
-
-        E_Gammas.append(E_Gamma)
-        E_Ks.append(E_K)
+    (Ediffs, mstar_Gammas, mstar_Ks, nh_Gammas_frac, nh_Ks_frac,
+            E_Gammas, E_Ks) = transpose_lists(result)
 
     E_Gamma_Ks, E_Gamma_steps, E_K_steps, E_Gamma_d2s, E_K_d2s = [], [], [], [], []
     for E_index, (E_Gamma, E_K) in enumerate(zip(E_Gammas, E_Ks)):
