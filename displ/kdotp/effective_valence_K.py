@@ -228,7 +228,45 @@ def effective_mass_band(Hfn, k0, band_index, alat_Bohr):
 
     return mstars
 
-def make_effective_Hamiltonian_K(subdir, prefix, states_from_dm=True, verbose=False):
+def get_layer_basis_from_dm_K(U, top, Pzs, verbose):
+    top_states = [U[:, [t]] for t in top]
+
+    layer_weights, layer_basis = layer_basis_from_dm(top_states, Pzs)
+
+    if verbose:
+        print("layer weights")
+        print(layer_weights)
+        print("layer basis")
+        for i, v in enumerate(layer_basis):
+            print("state ", i)
+            for j in range(len(v)):
+                print(j, v[j])
+
+    return layer_weights, layer_basis
+
+def get_layer_basis_direct_K(U, top, Pzs, verbose):
+    # Basis states for the effective Hamiltonian:
+    # |P_{z = 0} m_0> (m_0 = highest valence state);
+    # |P_{z = 1} m_1>
+    # |P_{z = 2} m_0>.
+    # TODO support arbitrary layer number
+    layer_basis_indices = [(0, 0), (0, 4), (1, 1), (1, 5), (2, 0), (2, 4)]
+    layer_basis = []
+
+    for z, m in layer_basis_indices:
+        Pz = Pzs[z]
+    
+        band_index = top[m]
+        eigenstate = U[:, [band_index]]
+
+        proj_state = np.dot(Pz, eigenstate)
+        proj_state_normed = proj_state / np.linalg.norm(proj_state)
+
+        layer_basis.append(proj_state_normed)
+
+    return layer_weights, layer_basis
+
+def make_effective_Hamiltonian_K(k0_lat, subdir, prefix, get_layer_basis, verbose=False):
     num_layers = 3
 
     work = _get_work(subdir, prefix)
@@ -240,8 +278,7 @@ def make_effective_Hamiltonian_K(subdir, prefix, states_from_dm=True, verbose=Fa
     alat_Bohr = 1.0
     R = 2 * np.pi * np.linalg.inv(latVecs.T)
 
-    K_lat = np.array([1/3, 1/3, 0.0])
-    K_cart = np.dot(K_lat, R)
+    K_cart = np.dot(k0_lat, R)
 
     if verbose:
         print(K_cart)
@@ -263,38 +300,7 @@ def make_effective_Hamiltonian_K(subdir, prefix, states_from_dm=True, verbose=Fa
 
     top = top_valence_indices(E_F, 2*num_layers, Es)
 
-    if states_from_dm:
-        top_states = [U[:, [t]] for t in top]
-
-        layer_weights, layer_basis = layer_basis_from_dm(top_states, Pzs)
-
-        if verbose:
-            print("layer weights")
-            print(layer_weights)
-            print("layer basis")
-            for i, v in enumerate(layer_basis):
-                print("state ", i)
-                for j in range(len(v)):
-                    print(j, v[j])
-    else:
-        # Basis states for the effective Hamiltonian:
-        # |P_{z = 0} m_0> (m_0 = highest valence state);
-        # |P_{z = 1} m_1>
-        # |P_{z = 2} m_0>.
-        # TODO support arbitrary layer number
-        layer_basis_indices = [(0, 0), (0, 4), (1, 1), (1, 5), (2, 0), (2, 4)]
-        layer_basis = []
-
-        for z, m in layer_basis_indices:
-            Pz = Pzs[z]
-        
-            band_index = top[m]
-            eigenstate = U[:, [band_index]]
-
-            proj_state = np.dot(Pz, eigenstate)
-            proj_state_normed = proj_state / np.linalg.norm(proj_state)
-
-            layer_basis.append(proj_state_normed)
+    layer_weights, layer_basis = get_layer_basis(U, top, Pzs, verbose)
 
     complement_basis_mat = nullspace(array_with_rows(layer_basis).conjugate())
     complement_basis = []
@@ -482,7 +488,14 @@ def _main():
             help="Choose states from layer-projected density matrix")
     args = parser.parse_args()
 
-    make_effective_Hamiltonian_K(args.subdir, args.prefix, args.states_from_dm, verbose=True)
+    if args.states_from_dm:
+        get_layer_basis = get_layer_basis_from_dm_K
+    else:
+        get_layer_basis = get_layer_basis_direct_K
+
+    K_lat = np.array([1/3, 1/3, 0.0])
+
+    make_effective_Hamiltonian_K(K_lat, args.subdir, args.prefix, get_layer_basis, verbose=True)
 
 if __name__ == "__main__":
     _main()

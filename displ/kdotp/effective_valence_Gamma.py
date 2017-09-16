@@ -17,6 +17,22 @@ from displ.kdotp.effective_valence_K import (layer_basis_from_dm,
         correction_Hamiltonian_ps, correction_Hamiltonian_mstar_inverses,
         correction_Hamiltonian_PQ, H_kdotp, effective_mass_band)
 
+def get_layer_basis_Gamma(U, top, Pzs, verbose):
+    top_states = [U[:, [t]] for t in top]
+
+    layer_weights, layer_basis = layer_basis_from_dm(top_states, Pzs)
+
+    if verbose:
+        print("layer weights")
+        print(layer_weights)
+        print("layer basis")
+        for i, v in enumerate(layer_basis):
+            print("state ", i)
+            for j in range(len(v)):
+                print(j, v[j])
+
+    return layer_weights, layer_basis
+
 def make_effective_Hamiltonian_Gamma(subdir, prefix, top_two_only, verbose=False):
     num_layers = 3
 
@@ -59,18 +75,7 @@ def make_effective_Hamiltonian_Gamma(subdir, prefix, top_two_only, verbose=False
     else:
         top = top_valence_indices(E_F, 2*num_layers, Es)
 
-    top_states = [U[:, [t]] for t in top]
-
-    layer_weights, layer_basis = layer_basis_from_dm(top_states, Pzs)
-
-    if verbose:
-        print("layer weights")
-        print(layer_weights)
-        print("layer basis")
-        for i, v in enumerate(layer_basis):
-            print("state ", i)
-            for j in range(len(v)):
-                print(j, v[j])
+    layer_weights, layer_basis = get_layer_basis_Gamma(U, top, Pzs, verbose)
 
     complement_basis_mat = nullspace(array_with_rows(layer_basis).conjugate())
     complement_basis = []

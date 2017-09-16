@@ -2,7 +2,7 @@ from __future__ import division
 import argparse
 import numpy as np
 from displ.kdotp.dft_efield import get_prefixes
-from displ.kdotp.effective_valence_K import make_effective_Hamiltonian_K
+from displ.kdotp.effective_valence_K import make_effective_Hamiltonian_K, get_layer_basis_from_dm_K
 from displ.kdotp.effective_valence_Gamma import make_effective_Hamiltonian_Gamma
 
 def effective_dielectric(layer_energies, d_nm, E_V_nm):
@@ -37,8 +37,9 @@ def _main():
 
         print("E_V_nm = ", E_V_nm)
 
-        H0_tot_K, ps_tot_K, mstar_inv_tot_K = make_effective_Hamiltonian_K(args.subdir,
-                prefix, states_from_dm=True, verbose=False)
+        K_lat = np.array([1/3, 1/3, 0.0])
+        H0_tot_K, ps_tot_K, mstar_inv_tot_K = make_effective_Hamiltonian_K(K_lat, args.subdir,
+                prefix, get_layer_basis_from_dm_K, verbose=False)
 
         print("on-site K:", [H0_tot_K[i, i] for i in range(6)])
 
