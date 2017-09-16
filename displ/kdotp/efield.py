@@ -399,87 +399,7 @@ def decimal_format(x, num_decimal):
 
     return sgn + x_front + " x 10$^{" + str(num_digits_exp) + "}$"
 
-def _main():
-    np.set_printoptions(threshold=np.inf)
-
-    parser = argparse.ArgumentParser("TMD multilayer response to electric field",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("prefix", type=str,
-            help="Prefix for calculation")
-    parser.add_argument("--subdir", type=str, default=None,
-            help="Subdirectory under work_base where calculation was run")
-    parser.add_argument("--num_layers", type=int, default=3,
-            help="Number of layers")
-    parser.add_argument("--holes", type=float, default=8e12,
-            help="Hole concentration [cm^{-2}]")
-    parser.add_argument("--screened", action='store_true',
-            help="Include screening by holes")
-    parser.add_argument("--initial_mass", action='store_true',
-            help="Use effective mass at E_perp = 0, p = 0 instead of recalculating for each phi")
-    parser.add_argument("--plot_initial", action='store_true',
-            help="Plot initial band structure with max applied field, before charge convergence")
-    args = parser.parse_args()
-
-    if args.num_layers != 3:
-        assert("num_layers != 3 not implemented")
-
-    work = _get_work(args.subdir, args.prefix)
-    wannier_dir = os.path.join(work, "wannier")
-    scf_path = os.path.join(wannier_dir, "scf.out")
-
-    E_F_base = fermi_from_scf(scf_path)
-    latVecs = latVecs_from_scf(scf_path)
-    R = 2 * np.pi * np.linalg.inv(latVecs.T)
-
-    Hr_path = os.path.join(wannier_dir, "{}_hr.dat".format(args.prefix))
-    Hr = extractHr(Hr_path)
-
-    d_A = 6.488 # Angstrom
-    d_bohr = _bohr_per_Angstrom * d_A
-
-    hole_density_cm2 = args.holes
-    hole_density_bohr2 = hole_density_cm2 / (10**8 * _bohr_per_Angstrom)**2
-
-    #print("hole_density_bohr2")
-    #print(hole_density_bohr2)
-
-    # Choose initial potential assuming holes are distributed uniformally.
-    sigma_layer_initial = (1/3) * _e_C * hole_density_bohr2
-
-    sigmas_initial = sigma_layer_initial * np.array([1.0, 1.0, 1.0])
-    #print("sigmas_initial [C/bohr^2]")
-    #print(sigmas_initial)
-
-    # Dielectric constant of WSe2:
-    # Kim et al., ACS Nano 9, 4527 (2015).
-    # http://pubs.acs.org/doi/abs/10.1021/acsnano.5b01114
-    epsilon_r = 7.2
-
-    Pzs = get_layer_projections(args.num_layers)
-
-    E_V_nms = np.linspace(0.0, 1.2, 84)
-
-    if args.plot_initial:
-        E_V_bohr = E_V_nms[-1] / (10 * _bohr_per_Angstrom)
-        phis_initial_max = get_phis(sigmas_initial, d_bohr, E_V_bohr, epsilon_r, args.screened)
-        plot_H_k0_phis(H_k0s, phis_initial, Pzs, band_indices, E_F_base)
-        return
-
-    if hole_density_cm2 > 0.0:
-        tol_abs = 1e-6 * sum(sigmas_initial)
-    else:
-        tol_abs = 1e-12 * _e_C
-
-    tol_rel = 1e-6
-
-    distr_args = []
-    for E_V_nm in E_V_nms:
-        distr_args.append([E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial,
-                Pzs, hole_density_bohr2, d_bohr, epsilon_r, tol_abs, tol_rel, args.initial_mass, args.screened])
-
-    with Pool() as p:
-        nh_Es = p.starmap(hole_distribution, distr_args)
-
+def plot_results(nh_Es, hole_density_bohr2, hole_density_cm2, E_V_nms):
     E_Gamma_0 = nh_Es[0][2]
     E_K_0 = nh_Es[0][3]
 
@@ -570,6 +490,93 @@ def _main():
     plt.legend(loc=0, title=hole_density_note)
     plt.savefig("energy_d2s_Efield.png", bbox_inches='tight', dpi=500)
     plt.clf()
+
+def _main():
+    np.set_printoptions(threshold=np.inf)
+
+    parser = argparse.ArgumentParser("TMD multilayer response to electric field",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("prefix", type=str,
+            help="Prefix for calculation")
+    parser.add_argument("--subdir", type=str, default=None,
+            help="Subdirectory under work_base where calculation was run")
+    parser.add_argument("--num_layers", type=int, default=3,
+            help="Number of layers")
+    parser.add_argument("--holes", type=float, default=8e12,
+            help="Hole concentration [cm^{-2}]")
+    parser.add_argument("--screened", action='store_true',
+            help="Include screening by holes")
+    parser.add_argument("--initial_mass", action='store_true',
+            help="Use effective mass at E_perp = 0, p = 0 instead of recalculating for each phi")
+    parser.add_argument("--plot_initial", action='store_true',
+            help="Plot initial band structure with max applied field, before charge convergence")
+    args = parser.parse_args()
+
+    if args.num_layers != 3:
+        assert("num_layers != 3 not implemented")
+
+    work = _get_work(args.subdir, args.prefix)
+    wannier_dir = os.path.join(work, "wannier")
+    scf_path = os.path.join(wannier_dir, "scf.out")
+
+    E_F_base = fermi_from_scf(scf_path)
+    latVecs = latVecs_from_scf(scf_path)
+    R = 2 * np.pi * np.linalg.inv(latVecs.T)
+
+    Hr_path = os.path.join(wannier_dir, "{}_hr.dat".format(args.prefix))
+    Hr = extractHr(Hr_path)
+
+    d_A = 6.488 # Angstrom
+    d_bohr = _bohr_per_Angstrom * d_A
+
+    hole_density_cm2 = args.holes
+    hole_density_bohr2 = hole_density_cm2 / (10**8 * _bohr_per_Angstrom)**2
+
+    #print("hole_density_bohr2")
+    #print(hole_density_bohr2)
+
+    # Choose initial potential assuming holes are distributed uniformally.
+    sigma_layer_initial = (1/3) * _e_C * hole_density_bohr2
+
+    sigmas_initial = sigma_layer_initial * np.array([1.0, 1.0, 1.0])
+    #print("sigmas_initial [C/bohr^2]")
+    #print(sigmas_initial)
+
+    # Dielectric constant of WSe2:
+    # Kim et al., ACS Nano 9, 4527 (2015).
+    # http://pubs.acs.org/doi/abs/10.1021/acsnano.5b01114
+    #epsilon_r = 7.2
+
+    # Effective dielectric constant from DFT (LDA).
+    # avg(K^high_{top - bottom}, Gamma_{top - bottom})
+    epsilon_r = 7.87
+
+    Pzs = get_layer_projections(args.num_layers)
+
+    E_V_nms = np.linspace(0.0, 1.2, 84)
+
+    if args.plot_initial:
+        E_V_bohr = E_V_nms[-1] / (10 * _bohr_per_Angstrom)
+        phis_initial_max = get_phis(sigmas_initial, d_bohr, E_V_bohr, epsilon_r, args.screened)
+        plot_H_k0_phis(H_k0s, phis_initial, Pzs, band_indices, E_F_base)
+        return
+
+    if hole_density_cm2 > 0.0:
+        tol_abs = 1e-6 * sum(sigmas_initial)
+    else:
+        tol_abs = 1e-12 * _e_C
+
+    tol_rel = 1e-6
+
+    distr_args = []
+    for E_V_nm in E_V_nms:
+        distr_args.append([E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial,
+                Pzs, hole_density_bohr2, d_bohr, epsilon_r, tol_abs, tol_rel, args.initial_mass, args.screened])
+
+    with Pool() as p:
+        nh_Es = p.starmap(hole_distribution, distr_args)
+
+    plot_results(nh_Es, hole_density_bohr2, hole_density_cm2, E_V_nms)
 
 if __name__ == "__main__":
     _main()
