@@ -100,15 +100,17 @@ def plot_bands(xs, special_xs, band_path_labels, Emks, labels, styles, xlim, yli
 
             plt.plot(this_xs, Emk, style, label=m_label)
 
-    plt.ylabel("$E - E_{\\Gamma}^0$ [eV]")
+    plt.ylabel("$E - E_{\\Gamma}^0$ [eV]", fontsize='large')
     plt.ylim(ylim[0], ylim[1])
 
     plt.xlim(xlim[0], xlim[1])
 
-    for special_x in special_xs:
-        plt.axvline(special_x, color='k', alpha=0.5, linestyle='--')
+    plt.axhline(0.0, color='k', alpha=0.25, linestyle='-')
 
-    plt.xticks(special_xs, band_path_labels)
+    for special_x in special_xs:
+        plt.axvline(special_x, color='k', alpha=0.25, linestyle='-')
+
+    plt.xticks(special_xs, band_path_labels, fontsize='large')
 
     plt.legend(loc=0)
 
@@ -130,6 +132,8 @@ def _main():
             help="Minimum energy to plot (using original energy zero)")
     parser.add_argument("--maxE", type=float, default=5.75,
             help="Maximum energy to plot (using original energy zero)")
+    parser.add_argument("--load", action='store_true',
+            help="Load stored band data instead of recalculating")
     args = parser.parse_args()
 
     E_mid_val = args.prefix_E_mid.split('_')[-1]
@@ -146,36 +150,47 @@ def _main():
     labels = ["$E = 0$", "$E = {}$ V/nm".format(E_mid_val), "$E = {}$ V/nm".format(E_high_val)]
     styles = ['r-', 'b-.', 'k--']
 
+
     xs, special_xs, Emks = [], [], []
-    E_Gamma_Eperp_0 = None
-    out_data = []
-    for prefix_index, prefix in enumerate(prefixes):
-        work = _get_work(args.subdir, prefix)
-        wannier_dir = os.path.join(work, "wannier")
-        scf_path = os.path.join(wannier_dir, "scf.out")
+    if args.load:
+        with open("Efield_bands.json", 'r') as fp:
+            in_data = json.load(fp)
 
-        latVecs = latVecs_from_scf(scf_path)
+        xs, special_xs, Emks = list(map(lambda k: [d[k] for d in in_data],
+                ["xs", "special_xs", "Emks"]))
 
-        Hr_path = os.path.join(wannier_dir, "{}_hr.dat".format(prefix))
-        Hr = extractHr(Hr_path)
+        E_Gamma_Eperp_0 = in_data[0]["E_Gamma_Eperp_0"]
+    else:
+        out_data = []
 
-        if prefix_index == 0:
-            E_F = fermi_from_scf(scf_path)
-            E_Gamma_Eperp_0 = get_E_Gamma(Hr, E_F)
+        for prefix_index, prefix in enumerate(prefixes):
+            work = _get_work(args.subdir, prefix)
+            wannier_dir = os.path.join(work, "wannier")
+            scf_path = os.path.join(wannier_dir, "scf.out")
 
-        this_xs, this_special_xs, this_Emks = calculate_bands(Hr, latVecs, band_path_lat, Nk_per_panel)
+            latVecs = latVecs_from_scf(scf_path)
 
-        this_Emks = shift_Emks(this_Emks, E_Gamma_Eperp_0)
+            Hr_path = os.path.join(wannier_dir, "{}_hr.dat".format(prefix))
+            Hr = extractHr(Hr_path)
 
-        xs.append(this_xs)
-        special_xs.append(this_special_xs)
-        Emks.append(this_Emks)
+            if prefix_index == 0:
+                E_F = fermi_from_scf(scf_path)
+                E_Gamma_Eperp_0 = get_E_Gamma(Hr, E_F)
 
-        out_data.append({"prefix": prefix, "xs": this_xs, "special_xs": this_special_xs,
-                "band_path_labels": band_path_labels, "Emks": this_Emks})
+            this_xs, this_special_xs, this_Emks = calculate_bands(Hr, latVecs, band_path_lat, Nk_per_panel)
 
-    with open("Efield_bands.json", 'w') as fp:
-        json.dump(out_data, fp)
+            this_Emks = shift_Emks(this_Emks, E_Gamma_Eperp_0)
+
+            xs.append(this_xs)
+            special_xs.append(this_special_xs)
+            Emks.append(this_Emks)
+
+            out_data.append({"prefix": prefix, "xs": this_xs, "special_xs": this_special_xs,
+                    "band_path_labels": band_path_labels, "Emks": this_Emks,
+                    "E_Gamma_Eperp_0": E_Gamma_Eperp_0})
+
+        with open("Efield_bands.json", 'w') as fp:
+            json.dump(out_data, fp)
 
     full_min_x, full_max_x = 0.0, 1.0
     full_minE, full_maxE = args.minE - E_Gamma_Eperp_0, args.maxE - E_Gamma_Eperp_0
