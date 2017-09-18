@@ -18,7 +18,7 @@ def check_consistency(data, epsilon_r, expected_hole_density):
 def plot_ediffs(results):
     keys = ["dft_no_holes", "kdotp_no_holes", "dft_screened", "kdotp_screened"]
     styles = ['rs', 'r--', 'ko', 'k-']
-    Ediff_labels = ["$p$ = 0 ($E$ by DFT)", "$p$ = 0 ($E$ by model)", "$p$ = {} ($E$ by DFT)", "$p$ = {} ($E$ by model)"]
+    Ediff_labels = ["$p$ = 0 ($E$ by DFT)", "$p$ = 0 ($E$ by $k \cdot p$)", "$p$ = {} ($E$ by DFT)", "$p$ = {} ($E$ by $k \cdot p$)"]
     expected_hole_densities = [0.0, 0.0, None, None]
     epsilon_r = None
 
@@ -29,12 +29,12 @@ def plot_ediffs(results):
         E_Gamma_Ks = results[k]["E_Gamma_Ks"]
 
         if results[k]["hole_density_cm2"] != 0.0:
-            label = label.format(decimal_format(results[k]["hole_density_cm2"], 1))
+            label = label.format(decimal_format(results[k]["hole_density_cm2"], 0) + " cm$^{-2}$")
 
         plt.plot(E_V_nms, E_Gamma_Ks, style, label=label)
 
-    plt.xlabel("$E$ [V/nm]")
-    plt.ylabel("$E_{\\Gamma} - E_K$ [eV]")
+    plt.xlabel("$E$ [V/nm]", fontsize='large')
+    plt.ylabel("$E_{\\Gamma} - E_K$ [eV]", fontsize='large')
     plt.legend(loc=0)
     plt.axhline(0.0, color='k', linestyle='--', alpha=0.5)
 
@@ -45,18 +45,19 @@ def plot_occupations(results):
     result_keys = ["dft_screened", "kdotp_screened", "dft_screened", "kdotp_screened"]
     data_keys = ["nh_Gammas_frac", "nh_Gammas_frac", "nh_Ks_frac", "nh_Ks_frac"]
     styles = ['ks', 'k-', 'bo', 'b--']
-    labels = ["$\\Gamma$ ($E$ by DFT)", "$\\Gamma$ ($E$ by model)", "$K$ ($E$ by DFT)", "$K$ ($E$ by model)"]
+    labels = ["$\\Gamma$ ($E$ by DFT)", "$\\Gamma$ ($E$ by $k \cdot p$)", "$K$ ($E$ by DFT)", "$K$ ($E$ by $k \cdot p$)"]
 
     for rk, dk, style, label in zip(result_keys, data_keys, styles, labels):
         E_V_nms = results[rk]["E_V_nms"]
         ys = results[rk][dk]
+        hole_density_cm2 = results[rk]["hole_density_cm2"]
 
         plt.plot(E_V_nms, ys, style, label=label)
 
-    plt.xlabel("$E$ [V/nm]")
-    plt.ylabel("Occupation fraction")
+    plt.xlabel("$E$ [V/nm]", fontsize='large')
+    plt.ylabel("Occupation fraction", fontsize='large')
     plt.ylim(0.0, 1.0)
-    plt.legend(loc=0)
+    plt.legend(loc=0, title="$p$ = {}".format(decimal_format(hole_density_cm2, 0) + " cm$^{-2}$"))
 
     plt.savefig("collected_occupations_Efield.png", bbox_inches='tight', dpi=500)
     plt.clf()
