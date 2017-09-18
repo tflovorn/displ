@@ -36,7 +36,7 @@ def plot_ediffs(results):
     plt.xlabel("$E$ [V/nm]", fontsize='large')
     plt.ylabel("$E_{\\Gamma} - E_K$ [eV]", fontsize='large')
     plt.legend(loc=0)
-    plt.axhline(0.0, color='k', linestyle='--', alpha=0.5)
+    plt.axhline(0.0, color='k', linestyle='-', alpha=0.25)
 
     plt.savefig("collected_Ediffs_Efield.png", bbox_inches='tight', dpi=500)
     plt.clf()
