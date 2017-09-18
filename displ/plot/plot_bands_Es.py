@@ -5,9 +5,10 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 from displ.build.build import _get_work
-from displ.pwscf.parseScf import latVecs_from_scf
+from displ.pwscf.parseScf import latVecs_from_scf, fermi_from_scf
 from displ.wannier.extractHr import extractHr
-from displ.wannier.bands import Hk
+from displ.wannier.bands import Hk, Hk_recip
+from displ.kdotp.model_weights_K import top_valence_indices
 
 def get_ks(R, band_path_lat, Nk_per_panel):
     # Each panel includes the ending symmetry point, but not the beginning one.
@@ -72,6 +73,23 @@ def calculate_bands(Hr, latVecs, band_path_lat, Nk_per_panel):
 
     return xs, special_xs, Emks
 
+def get_E_Gamma(Hr, E_F):
+    Gamma_lat = np.array([0.0, 0.0, 0.0])
+    this_Hk = Hk_recip(Gamma_lat, Hr)
+    Es = np.linalg.eigvalsh(this_Hk)
+
+    top_Gamma_index = top_valence_indices(E_F, 1, Es)[0]
+    return Es[top_Gamma_index]
+
+def shift_Emks(Emks, E_base):
+    new_Emks = []
+    for Em in Emks:
+        new_Emks.append([])
+        for E in Em:
+            new_Emks[-1].append(E - E_base)
+
+    return new_Emks
+
 def _main():
     parser = argparse.ArgumentParser("Plot band structure for multiple electric field values",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -101,7 +119,9 @@ def _main():
     styles = ['r-', 'k--']
 
     xs, special_xs, Emks = [], [], []
-    for prefix in prefixes:
+    E_Gamma_Eperp_0 = None
+    out_data = []
+    for prefix_index, prefix in enumerate(prefixes):
         work = _get_work(args.subdir, prefix)
         wannier_dir = os.path.join(work, "wannier")
         scf_path = os.path.join(wannier_dir, "scf.out")
@@ -111,13 +131,23 @@ def _main():
         Hr_path = os.path.join(wannier_dir, "{}_hr.dat".format(prefix))
         Hr = extractHr(Hr_path)
 
+        if prefix_index == 0:
+            E_F = fermi_from_scf(scf_path)
+            E_Gamma_Eperp_0 = get_E_Gamma(Hr, E_F)
+
         this_xs, this_special_xs, this_Emks = calculate_bands(Hr, latVecs, band_path_lat, Nk_per_panel)
+
+        this_Emks = shift_Emks(this_Emks, E_Gamma_Eperp_0)
 
         xs.append(this_xs)
         special_xs.append(this_special_xs)
         Emks.append(this_Emks)
 
-    # TODO - output data
+        out_data.append({"prefix": prefix, "xs": this_xs, "special_xs": this_special_xs,
+                "band_path_labels": band_path_labels, "Emks": this_Emks})
+
+    with open("Efield_bands.json", 'w') as fp:
+        json.dump(out_data, fp)
 
     for this_xs, this_Emks, label, style in zip(xs, Emks, labels, styles):
         for m, Emk in enumerate(this_Emks):
@@ -128,8 +158,8 @@ def _main():
 
             plt.plot(this_xs, Emk, style, label=m_label)
 
-    # TODO - change zero
-    plt.ylim(args.minE, args.maxE)
+    plt.ylabel("$E - E_{\\Gamma}^0$ [eV]")
+    plt.ylim(args.minE - E_Gamma_Eperp_0, args.maxE - E_Gamma_Eperp_0)
 
     plt.xlim(0.0, 1.0)
 
