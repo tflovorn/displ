@@ -18,7 +18,7 @@ def check_consistency(data, epsilon_r, expected_hole_density):
 def plot_ediffs(results):
     keys = ["dft_no_holes", "kdotp_no_holes", "dft_screened", "kdotp_screened"]
     styles = ['rs', 'r--', 'ko', 'k-']
-    Ediff_labels = ['$p$ = 0, E by DFT', '$p$ = 0, E by model', '$p$ = {}, E by DFT', '$p$ = {}, E by model']
+    Ediff_labels = ["$p$ = 0 ($E$ by DFT)", "$p$ = 0 ($E$ by model)", "$p$ = {} ($E$ by DFT)", "$p$ = {} ($E$ by model)"]
     expected_hole_densities = [0.0, 0.0, None, None]
     epsilon_r = None
 
@@ -45,7 +45,7 @@ def plot_occupations(results):
     result_keys = ["dft_screened", "kdotp_screened", "dft_screened", "kdotp_screened"]
     data_keys = ["nh_Gammas_frac", "nh_Gammas_frac", "nh_Ks_frac", "nh_Ks_frac"]
     styles = ['ks', 'k-', 'bo', 'b--']
-    labels = ["$\\Gamma$, E by DFT", "$\\Gamma$, E by model", "$K$, E by DFT", "$K$, E by model"]
+    labels = ["$\\Gamma$ ($E$ by DFT)", "$\\Gamma$ ($E$ by model)", "$K$ ($E$ by DFT)", "$K$ ($E$ by model)"]
 
     for rk, dk, style, label in zip(result_keys, data_keys, styles, labels):
         E_V_nms = results[rk]["E_V_nms"]
