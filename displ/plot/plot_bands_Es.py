@@ -90,22 +90,50 @@ def shift_Emks(Emks, E_base):
 
     return new_Emks
 
+def plot_bands(xs, special_xs, band_path_labels, Emks, labels, styles, xlim, ylim, out_prefix):
+    for this_xs, this_Emks, label, style in zip(xs, Emks, labels, styles):
+        for m, Emk in enumerate(this_Emks):
+            if m == 0:
+                m_label = label
+            else:
+                m_label = '_' # exclude from legend
+
+            plt.plot(this_xs, Emk, style, label=m_label)
+
+    plt.ylabel("$E - E_{\\Gamma}^0$ [eV]")
+    plt.ylim(ylim[0], ylim[1])
+
+    plt.xlim(xlim[0], xlim[1])
+
+    for special_x in special_xs:
+        plt.axvline(special_x, color='k', alpha=0.5, linestyle='--')
+
+    plt.xticks(special_xs, band_path_labels)
+
+    plt.legend(loc=0)
+
+    plt.savefig("{}_Efield_bands.png".format(out_prefix), bbox_inches='tight', dpi=500)
+    plt.clf()
+
 def _main():
     parser = argparse.ArgumentParser("Plot band structure for multiple electric field values",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("prefix_E_0", type=str,
             help="Prefix for E = 0 calculation")
-    parser.add_argument("prefix_E_neq_0", type=str,
-            help="Prefix for E != 0 calculation")
+    parser.add_argument("prefix_E_mid", type=str,
+            help="Prefix for E != 0 calculation, middle value")
+    parser.add_argument("prefix_E_high", type=str,
+            help="Prefix for E != 0 calculation, high value")
     parser.add_argument("--subdir", type=str, default=None,
             help="Subdirectory under work_base where calculation was run")
-    parser.add_argument("--minE", type=float, default=None,
+    parser.add_argument("--minE", type=float, default=1.85,
             help="Minimum energy to plot (using original energy zero)")
-    parser.add_argument("--maxE", type=float, default=None,
+    parser.add_argument("--maxE", type=float, default=5.75,
             help="Maximum energy to plot (using original energy zero)")
     args = parser.parse_args()
 
-    E_neq_0_val = args.prefix_E_neq_0.split('_')[-1]
+    E_mid_val = args.prefix_E_mid.split('_')[-1]
+    E_high_val = args.prefix_E_high.split('_')[-1]
 
     Gamma_lat = np.array([0.0, 0.0, 0.0])
     M_lat = np.array([1/2, 0.0, 0.0])
@@ -114,9 +142,9 @@ def _main():
     band_path_labels = ["$\\Gamma$", "$M$", "$K$", "$\\Gamma$"]
     Nk_per_panel = 400
 
-    prefixes = [args.prefix_E_0, args.prefix_E_neq_0]
-    labels = ["$E = 0$", "$E = {}$ V/nm".format(E_neq_0_val)]
-    styles = ['r-', 'k--']
+    prefixes = [args.prefix_E_0, args.prefix_E_mid, args.prefix_E_high]
+    labels = ["$E = 0$", "$E = {}$ V/nm".format(E_mid_val), "$E = {}$ V/nm".format(E_high_val)]
+    styles = ['r-', 'b-.', 'k--']
 
     xs, special_xs, Emks = [], [], []
     E_Gamma_Eperp_0 = None
@@ -149,28 +177,21 @@ def _main():
     with open("Efield_bands.json", 'w') as fp:
         json.dump(out_data, fp)
 
-    for this_xs, this_Emks, label, style in zip(xs, Emks, labels, styles):
-        for m, Emk in enumerate(this_Emks):
-            if m == 0:
-                m_label = label
-            else:
-                m_label = '_' # exclude from legend
+    full_min_x, full_max_x = 0.0, 1.0
+    full_minE, full_maxE = args.minE - E_Gamma_Eperp_0, args.maxE - E_Gamma_Eperp_0
 
-            plt.plot(this_xs, Emk, style, label=m_label)
+    plot_bands([xs[0], xs[-1]], special_xs[0], band_path_labels, [Emks[0], Emks[-1]],
+            [labels[0], labels[-1]], [styles[0], styles[-1]], [full_min_x, full_max_x],
+            [full_minE, full_maxE], "full")
 
-    plt.ylabel("$E - E_{\\Gamma}^0$ [eV]")
-    plt.ylim(args.minE - E_Gamma_Eperp_0, args.maxE - E_Gamma_Eperp_0)
+    x_K = special_xs[0][2]
+    zoom_xlim = [x_K - 0.05, x_K + 0.05]
+    zoom_special_xs = [zoom_xlim[0], x_K, zoom_xlim[-1]]
+    zoom_band_path_labels = ["$\\leftarrow M$", "$K$", "$\\rightarrow \\Gamma$"]
+    zoom_ylim = [-0.3, 0.1]
 
-    plt.xlim(0.0, 1.0)
-
-    for special_x in special_xs[0]:
-        plt.axvline(special_x, color='k', alpha=0.5, linestyle='--')
-
-    plt.xticks(special_xs[0], band_path_labels)
-
-    plt.legend(loc=0)
-
-    plt.savefig("Efield_bands.png", bbox_inches='tight', dpi=500)
+    plot_bands(xs, zoom_special_xs, zoom_band_path_labels, Emks,
+            labels, styles, zoom_xlim, zoom_ylim, "zoom")
 
 if __name__ == "__main__":
     _main()
