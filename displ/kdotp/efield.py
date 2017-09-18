@@ -2,6 +2,7 @@ from __future__ import division
 import argparse
 import os
 import itertools
+import json
 from functools import partial
 from multiprocessing import Pool
 import numpy as np
@@ -60,7 +61,7 @@ def energies_at_k0(H_k0s, phis, Pzs, band_indices):
 
     return result
 
-def band_curvatures(H_k0s, phis, Pzs, band_indices):
+def band_curvatures(H_k0s, phis, Pzs, band_indices, curv_warn=None):
     '''Returns -(d^2 E_{k0;n} / dq_c^2) \equiv [hbar^2 / (2 * mstar_c{k0;n})]^{-1}
     for c = x, y.
 
@@ -91,7 +92,7 @@ def band_curvatures(H_k0s, phis, Pzs, band_indices):
 
             cx, cy = curvatures[0], curvatures[1]
             threshold = 0.05
-            if abs(cx - cy) > threshold * max(abs(cx), abs(cy)):
+            if (curv_warn is None or n in curv_warn) and abs(cx - cy) > threshold * max(abs(cx), abs(cy)):
                 print("WARNING: cx = {}, cy = {}, relative diff = {}".format(cx, cy, abs(cx - cy) / max(abs(cx), abs(cy))))
 
             result[-1].append([cx, cy])
@@ -118,7 +119,7 @@ def hole_density_at_E(E0s, curvatures, E):
 
     return result
 
-def get_Fermi_energy(H_k0s, phis, Pzs, band_indices, hole_density, curvatures=None):
+def get_Fermi_energy(H_k0s, phis, Pzs, band_indices, hole_density, curvatures=None, curv_warn=None):
     E0s = energies_at_k0(H_k0s, phis, Pzs, band_indices)
 
     # TODO - E_min choice here is not correct in general.
@@ -132,7 +133,7 @@ def get_Fermi_energy(H_k0s, phis, Pzs, band_indices, hole_density, curvatures=No
     E_max = max([max(E0s_k0) for E0s_k0 in E0s])
 
     if curvatures is None:
-        curvatures = band_curvatures(H_k0s, phis, Pzs, band_indices)
+        curvatures = band_curvatures(H_k0s, phis, Pzs, band_indices, curv_warn)
 
     def error_fn(E):
         band_hole_density = hole_density_at_E(E0s, curvatures, E)
@@ -283,7 +284,7 @@ def sigma_converged(sigmas, new_sigmas, tol_abs, tol_rel):
 
     return True
 
-def get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_density_bohr2, d_bohr, E_V_bohr, epsilon_r, tol_abs, tol_rel, curvatures=None, screened=True):
+def get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_density_bohr2, d_bohr, E_V_bohr, epsilon_r, tol_abs, tol_rel, curvatures=None, screened=True, curv_warn=None):
     sigmas = sigmas_initial
     new_sigmas = None
     beta = 0.5
@@ -296,7 +297,8 @@ def get_sigma_self_consistent(H_k0s, sigmas_initial, Pzs, band_indices, hole_den
 
         phis = get_phis(sigmas, d_bohr, E_V_bohr, epsilon_r, screened)
 
-        E_F, E0s, curvatures = get_Fermi_energy(H_k0s, phis, Pzs, band_indices, hole_density_bohr2, curvatures)
+        E_F, E0s, curvatures = get_Fermi_energy(H_k0s, phis, Pzs, band_indices, hole_density_bohr2,
+                curvatures, curv_warn)
 
         new_nh, new_nh_layer_total = layer_hole_density_at_E(H_k0s, phis, Pzs, band_indices, E_F, E0s, curvatures)
 
@@ -369,8 +371,8 @@ def hole_distribution(E_V_nm, R, Hr, latVecs, E_F_base, sigmas_initial, Pzs, hol
 
         E_converged.append([Es[m] for m in band_indices_k0])
 
-    E_Gamma = E_converged[0][0]
-    E_K = E_converged[1][0]
+    E_Gamma = max(E_converged[0])
+    E_K = max(E_converged[1])
 
     check_layer_weight(k0s, H_k0s, phis_converged, Pzs, band_indices, E_V_nm)
 
@@ -399,7 +401,7 @@ def decimal_format(x, num_decimal):
 
     return sgn + x_front + " x 10$^{" + str(num_digits_exp) + "}$"
 
-def plot_results(nh_Es, hole_density_bohr2, hole_density_cm2, E_V_nms):
+def plot_results(nh_Es, hole_density_bohr2, hole_density_cm2, epsilon_r, screened, E_V_nms):
     E_Gamma_0 = nh_Es[0][2]
     E_K_0 = nh_Es[0][3]
 
@@ -491,6 +493,19 @@ def plot_results(nh_Es, hole_density_bohr2, hole_density_cm2, E_V_nms):
     plt.savefig("energy_d2s_Efield.png", bbox_inches='tight', dpi=500)
     plt.clf()
 
+    out_data = {"epsilon_r": epsilon_r, "hole_density_cm2": hole_density_cm2,
+            "screened": screened, "E_V_nms": list(E_V_nms),
+            "E_Gamma_Ks": E_Gamma_Ks,
+            "E_Gamma_steps": E_Gamma_steps, "E_K_steps": E_K_steps,
+            "E_Gamma_steps": E_Gamma_d2s, "E_K_steps": E_K_d2s}
+
+    if hole_density_cm2 > 0.0:
+        out_data["nh_Gammas_frac"] = nh_Gammas_frac
+        out_data["nh_Ks_frac"] = nh_Ks_frac
+
+    with open("Efield.json", 'w') as fp:
+        json.dump(out_data, fp)
+
 def _main():
     np.set_printoptions(threshold=np.inf)
 
@@ -576,7 +591,7 @@ def _main():
     with Pool() as p:
         nh_Es = p.starmap(hole_distribution, distr_args)
 
-    plot_results(nh_Es, hole_density_bohr2, hole_density_cm2, E_V_nms)
+    plot_results(nh_Es, hole_density_bohr2, hole_density_cm2, epsilon_r, args.screened, E_V_nms)
 
 if __name__ == "__main__":
     _main()

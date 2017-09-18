@@ -142,11 +142,11 @@ def _main():
     # Dielectric constant of WSe2:
     # Kim et al., ACS Nano 9, 4527 (2015).
     # http://pubs.acs.org/doi/abs/10.1021/acsnano.5b01114
-    epsilon_r = 7.2
+    #epsilon_r = 7.2
 
     # Effective dielectric constant from DFT (LDA).
     # avg(K^high_{top - bottom}, Gamma_{top - bottom})
-    #epsilon_r = 7.87
+    epsilon_r = 7.87
 
     occ_args = [[prefix, args.subdir, args.screened, d_bohr, hole_density_bohr2,
             sigmas_initial, epsilon_r] for prefix in prefixes]
@@ -218,7 +218,7 @@ def _main():
 
     plt.title(hole_density_note)
 
-    plt.plot(E_V_nms, E_Gamma_Ks, 'r-')
+    plt.plot(E_V_nms, E_Gamma_Ks, 'r.')
     plt.savefig("Ediffs_dft_Efield.png", bbox_inches='tight', dpi=500)
     plt.clf()
 
@@ -232,8 +232,8 @@ def _main():
     plt.ylabel("Rate of energy change [eV/(V/nm)]")
     plt.xlim(E_V_nms[0], E_V_nms[-1])
 
-    plt.plot(E_V_nms[1:], E_Gamma_steps, 'r-', label="$dE_{\\Gamma}/dE$")
-    plt.plot(E_V_nms[1:], E_K_steps, 'b-', label="$dE_{K}/dE$")
+    plt.plot(E_V_nms[1:], E_Gamma_steps, 'r.', label="$dE_{\\Gamma}/dE$")
+    plt.plot(E_V_nms[1:], E_K_steps, 'b.', label="$dE_{K}/dE$")
     plt.legend(loc=0, title=hole_density_note)
     plt.savefig("energy_steps_dft_Efield.png", bbox_inches='tight', dpi=500)
     plt.clf()
@@ -243,11 +243,25 @@ def _main():
     plt.ylabel("Second derivative of energy change [eV/(V/nm)$^2$]")
     plt.xlim(E_V_nms[0], E_V_nms[-1])
 
-    plt.plot(E_V_nms[2:], E_Gamma_d2s, 'r-', label="$d^2 E_{\\Gamma}/dE^2$")
-    plt.plot(E_V_nms[2:], E_K_d2s, 'b-', label="$d^2 E_{K}/dE^2$")
+    plt.plot(E_V_nms[2:], E_Gamma_d2s, 'r.', label="$d^2 E_{\\Gamma}/dE^2$")
+    plt.plot(E_V_nms[2:], E_K_d2s, 'b.', label="$d^2 E_{K}/dE^2$")
     plt.legend(loc=0, title=hole_density_note)
     plt.savefig("energy_d2s_dft_Efield.png", bbox_inches='tight', dpi=500)
     plt.clf()
+
+    out_data = {"epsilon_r": epsilon_r, "hole_density_cm2": hole_density_cm2,
+            "screened": args.screened, "E_V_nms": E_V_nms,
+            "mstar_Gammas": mstar_Gammas, "mstar_Ks": mstar_Ks,
+            "E_Gamma_Ks": E_Gamma_Ks,
+            "E_Gamma_steps": E_Gamma_steps, "E_K_steps": E_K_steps,
+            "E_Gamma_steps": E_Gamma_d2s, "E_K_steps": E_K_d2s}
+
+    if hole_density_cm2 > 0.0:
+        out_data["nh_Gammas_frac"] = nh_Gammas_frac
+        out_data["nh_Ks_frac"] = nh_Ks_frac
+
+    with open("dft_Efield.json", 'w') as fp:
+        json.dump(out_data, fp)
 
 if __name__ == "__main__":
     _main()

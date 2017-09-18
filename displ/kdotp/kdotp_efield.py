@@ -44,7 +44,7 @@ def hole_distribution(E_V_nm, H0s, ps, mstar_invs, E_F_base, sigmas_initial, Pzs
 
     nh_converged, sigmas_converged = get_sigma_self_consistent(H_k0s, sigmas_initial,
             Pzs, band_indices, hole_density_bohr2, d_bohr, E_V_bohr, epsilon_r,
-            tol_abs, tol_rel, curvatures=None, screened=screened)
+            tol_abs, tol_rel, curvatures=None, screened=screened, curv_warn=[4, 5])
 
     phis_converged = get_phis(sigmas_converged, d_bohr, E_V_bohr, epsilon_r, screened)
 
@@ -165,7 +165,7 @@ def _main():
     with Pool() as p:
         nh_Es = p.starmap(hole_distribution, distr_args)
 
-    plot_results(nh_Es, hole_density_bohr2, hole_density_cm2, E_V_nms)
+    plot_results(nh_Es, hole_density_bohr2, hole_density_cm2, epsilon_r, args.screened, E_V_nms)
 
 if __name__ == "__main__":
     _main()
