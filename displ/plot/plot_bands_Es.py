@@ -2,6 +2,7 @@ from __future__ import division
 import argparse
 import os
 import json
+import csv
 import numpy as np
 import matplotlib.pyplot as plt
 from displ.build.build import _get_work
@@ -89,6 +90,35 @@ def shift_Emks(Emks, E_base):
             new_Emks[-1].append(E - E_base)
 
     return new_Emks
+
+def write_bands_csv(xs, Emks, fpath):
+    num_bands = len(Emks)
+    row_keys = ["x"]
+    for m in range(num_bands):
+        row_keys.append("m_{}".format(m))
+
+    Ekms = transpose_lists(Emks)
+
+    with open(fpath, 'w') as fp:
+        writer = csv.writer(fp)
+        writer.writerow(row_keys)
+
+        for x, Ek in zip(xs, Ekms):
+            row = [x]
+            for E in Ek:
+                row.append(E)
+
+            writer.writerow(row)
+
+def write_bands_aux(special_xs, band_path_label, fpath):
+    row_keys = ["special_x_value", "special_x_label"]
+
+    with open(fpath, 'w') as fp:
+        writer = csv.writer(fp)
+        writer.writerow(row_keys)
+
+        for x, label in zip(special_xs, band_path_label):
+            writer.writerow([x, label])
 
 def plot_bands(xs, special_xs, band_path_labels, Emks, labels, styles, xlim, ylim, out_prefix):
     for this_xs, this_Emks, label, style in zip(xs, Emks, labels, styles):
@@ -195,6 +225,15 @@ def _main():
     full_min_x, full_max_x = 0.0, 1.0
     full_minE, full_maxE = args.minE - E_Gamma_Eperp_0, args.maxE - E_Gamma_Eperp_0
 
+    print("full_minE = ", full_minE)
+    print("full_maxE = ", full_maxE)
+
+    for this_xs, this_Emks, path_suffix in zip(xs, Emks, ["0.0", "0.5", "1.0"]):
+        out_path = "Efield_bands_E_{}.csv".format(path_suffix)
+        write_bands_csv(this_xs, this_Emks, out_path)
+
+    write_bands_aux(special_xs[0], band_path_labels, "Efield_bands_aux.csv")
+
     plot_bands([xs[0], xs[-1]], special_xs[0], band_path_labels, [Emks[0], Emks[-1]],
             [labels[0], labels[-1]], [styles[0], styles[-1]], [full_min_x, full_max_x],
             [full_minE, full_maxE], "full")
@@ -204,6 +243,9 @@ def _main():
     zoom_special_xs = [zoom_xlim[0], x_K, zoom_xlim[-1]]
     zoom_band_path_labels = ["$\\leftarrow M$", "$K$", "$\\rightarrow \\Gamma$"]
     zoom_ylim = [-0.3, 0.1]
+
+    print("zoom_xlim = ", zoom_xlim)
+    print("zoom_ylim = ", zoom_ylim)
 
     plot_bands(xs, zoom_special_xs, zoom_band_path_labels, Emks,
             labels, styles, zoom_xlim, zoom_ylim, "zoom")
