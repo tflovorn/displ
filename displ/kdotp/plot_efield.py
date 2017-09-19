@@ -1,6 +1,8 @@
 from __future__ import division
 import argparse
+from collections import OrderedDict
 import json
+import csv
 import matplotlib.pyplot as plt
 from displ.kdotp.efield import decimal_format
 
@@ -41,6 +43,41 @@ def plot_ediffs(results):
     plt.savefig("collected_Ediffs_Efield.png", bbox_inches='tight', dpi=500)
     plt.clf()
 
+def write_csv_from_dict(table, row_keys, out_path):
+    with open(out_path, 'w') as fp:
+        fieldnames = ['E_V_nm']
+        fieldnames.extend(row_keys)
+
+        writer = csv.DictWriter(fp, fieldnames=fieldnames)
+
+        writer.writeheader()
+        for k, v in table.items():
+            row = {'E_V_nm': k}
+            for kr, vr in v.items():
+                row[kr] = vr
+
+            writer.writerow(row)
+
+def write_ediffs_csv(results):
+    table_unsorted = {}
+
+    result_keys = ["dft_no_holes", "kdotp_no_holes", "dft_screened", "kdotp_screened"]
+    row_keys = ["Ediff_p_0_DFT", "Ediff_p_0_kdotp", "Ediff_p_gt_0_DFT", "Ediff_p_gt_0_kdotp"]
+
+    for result_key, row_key in zip(result_keys, row_keys):
+        E_V_nms = results[result_key]["E_V_nms"]
+        E_Gamma_Ks = results[result_key]["E_Gamma_Ks"]
+
+        for E_V_nm, E_Gamma_K in zip(E_V_nms, E_Gamma_Ks):
+            if E_V_nm in table_unsorted:
+                table_unsorted[E_V_nm][row_key] = E_Gamma_K
+            else:
+                table_unsorted[E_V_nm] = {row_key: E_Gamma_K}
+
+    table = OrderedDict(sorted(table_unsorted.items(), key=lambda kv: kv[0]))
+
+    write_csv_from_dict(table, row_keys, "collected_Ediffs_Efield.csv")
+
 def plot_occupations(results):
     result_keys = ["dft_screened", "kdotp_screened", "dft_screened", "kdotp_screened"]
     data_keys = ["nh_Gammas_frac", "nh_Gammas_frac", "nh_Ks_frac", "nh_Ks_frac"]
@@ -62,6 +99,27 @@ def plot_occupations(results):
     plt.savefig("collected_occupations_Efield.png", bbox_inches='tight', dpi=500)
     plt.clf()
 
+def write_occupations_csv(results):
+    table_unsorted = {}
+
+    result_keys = ["dft_screened", "kdotp_screened", "dft_screened", "kdotp_screened"]
+    data_keys = ["nh_Gammas_frac", "nh_Gammas_frac", "nh_Ks_frac", "nh_Ks_frac"]
+    row_keys = ["occ_Gamma_DFT", "occ_Gamma_kdotp", "occ_K_DFT", "occ_K_kdotp"]
+
+    for result_key, data_key, row_key in zip(result_keys, data_keys, row_keys):
+        E_V_nms = results[result_key]["E_V_nms"]
+        occs = results[result_key][data_key]
+
+        for E_V_nm, occ in zip(E_V_nms, occs):
+            if E_V_nm in table_unsorted:
+                table_unsorted[E_V_nm][row_key] = occ
+            else:
+                table_unsorted[E_V_nm] = {row_key: occ}
+
+    table = OrderedDict(sorted(table_unsorted.items(), key=lambda kv: kv[0]))
+
+    write_csv_from_dict(table, row_keys, "collected_occupations_Efield.csv")
+
 def _main():
     parser = argparse.ArgumentParser("Plot TMD multilayer response to electric field",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -82,6 +140,9 @@ def _main():
         with open(path, 'r') as fp:
             k_data = json.load(fp)
             results[k] = k_data
+
+    write_ediffs_csv(results)
+    write_occupations_csv(results)
 
     plot_ediffs(results)
     plot_occupations(results)
