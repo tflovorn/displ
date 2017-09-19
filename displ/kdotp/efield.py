@@ -393,7 +393,10 @@ def decimal_format(x, num_decimal):
     num_digits_exp = int(np.floor(np.log10(abs(x))))
     x_reduced = abs(x) / 10**num_digits_exp
 
-    x_front = str(x_reduced)[:2+num_decimal]
+    if num_decimal == 0:
+        x_front = str(x_reduced)[0]
+    else:
+        x_front = str(x_reduced)[:2+num_decimal]
 
     sgn = ""
     if x < 0.0:
