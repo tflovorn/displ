@@ -304,6 +304,8 @@ def _main():
             help="Subdirectory under work_base to run calculation")
     parser.add_argument("--syms", type=str, default="WSe2;WSe2;WSe2",
             help="Semicolon-separated list of atomic composition of layers. Format example: WSe2;MoSe2;MoS2")
+    parser.add_argument("--stacking", type=str, default="AB",
+            help="Stacking mode: 'AB' (2H) or 'AA' (1T)")
     parser.add_argument("--minD", type=float, default=0.01,
             help="Minimum displacement field in V/nm")
     parser.add_argument("--maxD", type=float, default=0.5,
@@ -335,7 +337,14 @@ def _main():
 
     vacuum_dist = 20.0 # Angstrom
 
-    latvecs, at_syms, cartpos = make_cell(db, syms, c_sep, vacuum_dist)
+    if args.stacking == 'AB':
+        AB_stacking = True
+    elif args.stacking == 'AA':
+        AB_stacking = False
+    else:
+        raise ValueError("unrecognized value for argument 'stacking'")
+
+    latvecs, at_syms, cartpos = make_cell(db, syms, c_sep, vacuum_dist, AB_stacking)
 
     # latvecs units = Angstrom
     cell_area_Angstrom2 = np.linalg.norm(np.cross(latvecs[0], latvecs[1]))

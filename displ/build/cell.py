@@ -33,7 +33,7 @@ def symbols_from_2H(layer_system):
     # Consistent M, X, X order.
     return at_syms[0], at_syms[1]
 
-def make_cell(db, syms, c_sep, vacuum_dist):
+def make_cell(db, syms, c_sep, vacuum_dist, AB_stacking=True):
     layer_systems = [get_layer_system(db, sym, 'H') for sym in syms]
 
     # Choose lattice constant from first layer.
@@ -76,10 +76,15 @@ def make_cell(db, syms, c_sep, vacuum_dist):
                 for pos, z_pos in zip(layer_cartpos_2D, [X1_z, M_z, X2_z])])
 
         base_z += h + c_sep
-        if base_pos == 'A':
-            base_pos = 'B'
-        else:
-            base_pos = 'A'
+
+        # Two stacking modes: AB (2H) and AA (1T).
+        # In AB-stacking mode, alternate base_pos between TMD layers.
+        # in AA-stacking mode, keep base_pos constant.
+        if AB_stacking:
+            if base_pos == 'A':
+                base_pos = 'B'
+            else:
+                base_pos = 'A'
 
     # Assume atoms are given in order of z value.
     # TODO - enforce this?
