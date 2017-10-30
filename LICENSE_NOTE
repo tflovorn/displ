@@ -1,0 +1,5 @@
+File `displ/kdotp/linalg.py` uses code from the SciPy cookbook, which
+appears to have no license assigned.
+
+http://scipy-cookbook.readthedocs.io/items/RankNullspace.html
+https://github.com/scipy/scipy-cookbook/
