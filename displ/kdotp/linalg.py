@@ -6,6 +6,9 @@ def nullspace(A, atol=1e-13, rtol=0):
     The algorithm used by this function is based on the singular value
     decomposition of `A`.
 
+    Taken from the SciPy cookbook:
+    http://scipy-cookbook.readthedocs.io/items/RankNullspace.html
+
     Parameters
     ----------
     A : ndarray
