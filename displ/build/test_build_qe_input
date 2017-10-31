@@ -1,0 +1,48 @@
+ &control
+    calculation='scf',
+    restart_mode='from_scratch',
+    disk_io='low',
+    wf_collect=.true.,
+    pseudo_dir='/home1/03904/tlovorn/displ/pseudo/lda_soc',
+    outdir='./',
+    tefield=.true.,
+    dipfield=.true.,
+    prefix='test'
+ /
+ &system
+    ibrav=0,celldm(1)=1.889726164,nat=9,ntyp=2,
+    ecutwfc=60.0,
+    ecutrho=240.0,
+    edir=3,
+    emaxpos=0.972478214351,
+    eopreg=0.0550435712988,
+    eamp=0.00097234525,
+    tot_charge=0.0,
+    noncolin=.true.,
+    lspinorb=.true.,
+    occupations='tetrahedra'
+ /
+ &electrons
+    startingwfc='atomic+random',
+    diagonalization='david',
+    conv_thr=1e-08
+ /
+ATOMIC_SPECIES
+ Se 78.971 Se_r.oncvpsp.upf
+ W 183.84 W_r.oncvpsp.upf
+CELL_PARAMETERS alat
+ 1.65952077037    -2.8743742905    0.0
+ 1.65952077037    2.8743742905    0.0
+ 0.0    0.0    36.3348516968
+ATOMIC_POSITIONS crystal
+ Se 0.0 0.0 0.275217856494
+ W 0.333333333333 0.666666666667 0.321438654707
+ Se 0.0 0.0 0.36765945292
+ Se 0.333333333333 0.666666666667 0.453779201787
+ W 0.0 0.0 0.5
+ Se 0.333333333333 0.666666666667 0.546220798213
+ Se 0.0 0.0 0.63234054708
+ W 0.333333333333 0.666666666667 0.678561345293
+ Se 0.0 0.0 0.724782143506
+K_POINTS automatic
+18 18 1 0 0 0

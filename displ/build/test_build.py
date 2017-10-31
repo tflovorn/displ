@@ -3,6 +3,7 @@ import os
 import json
 from ase import Atoms
 import ase.db
+from displ.pwscf.build import build_qe
 from displ.build.cell import make_cell
 from displ.build.build import (_extract_syms, get_c_sep, get_wann_valence,
         get_num_bands, make_qe_config, get_pseudo_dir)
@@ -14,14 +15,25 @@ def check_qe_config(testcase, qe_config, qe_config_expected, soc, xc, pp):
     for k, v in qe_config.items():
         v_expected = qe_config_expected[k]
 
-        # pseudo_dir line is system-dependent.
+        # pseudo_dir value is system-dependent.
         if k == 'pseudo_dir':
             pseudo_dir_expected = get_pseudo_dir(soc, xc, pp)
             testcase.assertEqual(v, pseudo_dir_expected)
             continue
 
-        # Remaining lines are not.
+        # Remaining values are not.
         testcase.assertEqual(v, v_expected)
+
+def check_qe_input(testcase, qe_input, qe_input_expected, soc, xc, pp):
+    for line, line_expected in zip(qe_input.split('\n'), qe_input_expected.split('\n')):
+        # pseudo_dir value is system-dependent.
+        if line.split('=')[0] == 'pseudo_dir':
+            pseudo_dir_expected = get_pseudo_dir(soc, xc, pp)
+            testcase.assertEqual(line.split('=')[1].strip(), pseudo_dir_expected)
+            continue
+
+        # Remaining values are not.
+        testcase.assertEqual(line, line_expected)
 
 class TestQE(unittest.TestCase):
     def test_qe_config(self):
@@ -53,6 +65,16 @@ class TestQE(unittest.TestCase):
             qe_config_expected = json.load(fp)
 
         check_qe_config(self, qe_config, qe_config_expected, soc, xc, pp)
+
+        prefix = 'test'
+        qe_input = build_qe(system, prefix, 'scf', qe_config)
+        #with open('test_build_qe_input_new', 'w') as fp:
+        #    fp.write(qe_input)
+
+        with open('test_build_qe_input', 'r') as fp:
+            qe_input_expected = fp.read()
+
+        check_qe_input(self, qe_input, qe_input_expected, soc, xc, pp)
 
 if __name__ == "__main__":
     unittest.main()
