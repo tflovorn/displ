@@ -57,7 +57,7 @@ def build_qe(ase_system, prefix, calc_type, config):
 
     # Make strings representing each section of the PW input.
     # These may be None.
-    blocks = [("control", _control(calc_type, pseudo_dir, prefix)),
+    blocks = [("control", _control(calc_type, pseudo_dir, config["eamp"], prefix)),
             ("system", _system(ase_system, calc_type, config)),
             ("electrons", _electrons(calc_type, conv_thr)),
             ("atomic_species", _atomic_species(config["pseudo"], config["weight"])),
@@ -79,7 +79,7 @@ def _join(xs):
             ret = "\n".join([ret, x])
     return ret + "\n"
 
-def _control(calc_type, pseudo_dir, prefix):
+def _control(calc_type, pseudo_dir, eamp, prefix):
     nl = [" &control"]
     nl.append("    calculation='{}',".format(calc_type))
     nl.append("    restart_mode='from_scratch',")
@@ -87,8 +87,11 @@ def _control(calc_type, pseudo_dir, prefix):
     nl.append("    wf_collect=.true.,")
     nl.append("    pseudo_dir='{}',".format(pseudo_dir))
     nl.append("    outdir='./',")
-    nl.append("    tefield=.true.,")
-    nl.append("    dipfield=.true.,")
+
+    if eamp is not None:
+        nl.append("    tefield=.true.,")
+        nl.append("    dipfield=.true.,")
+
     nl.append("    prefix='{}'".format(prefix))
     nl.append(" /")
     return "\n".join(nl)
@@ -105,10 +108,11 @@ def _system(ase_system, calc_type, config):
     nl.append("    ecutwfc={},".format(str(config["ecutwfc"])))
     nl.append("    ecutrho={},".format(str(config["ecutrho"])))
 
-    nl.append("    edir={},".format(str(config["edir"])))
-    nl.append("    emaxpos={},".format(str(config["emaxpos"])))
-    nl.append("    eopreg={},".format(str(config["eopreg"])))
-    nl.append("    eamp={},".format(str(config["eamp"])))
+    if config["eamp"] is not None:
+        nl.append("    edir={},".format(str(config["edir"])))
+        nl.append("    emaxpos={},".format(str(config["emaxpos"])))
+        nl.append("    eopreg={},".format(str(config["eopreg"])))
+        nl.append("    eamp={},".format(str(config["eamp"])))
 
     if config["tot_charge"] is not None:
         nl.append("    tot_charge={},".format(str(config["tot_charge"])))

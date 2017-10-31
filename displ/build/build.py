@@ -31,7 +31,10 @@ def make_qe_config(system, D, holes_per_cell, soc, num_bands, xc, pp):
 
     # D is in V/nm and eamp is in Ha a.u.:
     # 1 a.u. = 5.14220632e2 V/nm --> 1 V/nm = 1.9446905e-3 a.u.
-    eamp = 1.9446905e-3 * D
+    if D is None:
+        eamp = None
+    else:
+        eamp = 1.9446905e-3 * D
 
     pseudo = get_pseudo(system.get_chemical_symbols(), soc, pp)
     pseudo_dir = get_pseudo_dir(soc, xc, pp)
