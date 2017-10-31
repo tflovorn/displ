@@ -305,7 +305,7 @@ def _main():
     parser.add_argument("--syms", type=str, default="WSe2;WSe2;WSe2",
             help="Semicolon-separated list of atomic composition of layers. Format example: WSe2;MoSe2;MoS2")
     parser.add_argument("--stacking", type=str, default="AB",
-            help="Stacking mode: 'AB' (2H) or 'AA' (1T)")
+            help="Stacking mode: 'AB' (2H) or 'AA' (1H)")
     parser.add_argument("--minD", type=float, default=0.01,
             help="Minimum displacement field in V/nm")
     parser.add_argument("--maxD", type=float, default=0.5,
