@@ -7,8 +7,8 @@ def write_queuefile(config):
 
     gconf = global_config()
 
-    if machine == "ls5":
-        _write_queuefile_ls5(config)
+    if machine in ["ls5", "stampede2"]:
+        _write_queuefile_tacc(config)
     else:
         raise ValueError("Unrecognized config['machine'] value")
 
@@ -16,8 +16,8 @@ def write_launcherfiles(config):
     machine = config["machine"]
     gconf = global_config()
 
-    if machine == "ls5":
-        _write_launcherfiles_ls5(config)
+    if machine in ["ls5", "stampede2"]:
+        _write_launcherfiles_tacc(config)
     else:
         raise ValueError("Unrecognized config['machine'] value")
 
@@ -25,7 +25,7 @@ def write_job_group_files(config, prefix_groups):
     machine = config["machine"]
     gconf = global_config()
 
-    if machine == "ls5":
+    if machine in ["ls5", "stampede2"]:
         for group_id, group in enumerate(prefix_groups):
             _write_group_queuefile(config, group, group_id)
     else:
@@ -76,12 +76,16 @@ def _ls_format_duration(hours, minutes):
 
     return "{}:{}:00".format(hstr, mstr)
 
-def _write_queuefile_ls5(config):
+def _write_queuefile_tacc(config):
     prefix = config["prefix"]
+
+    if config["machine"] == "stampede2":
+        nk = str(4*config["nodes"])
+    else:
+        nk = str(config["nodes"])
 
     qf = ["#!/bin/bash"]
     if config["calc"] == "wan_setup":
-        nk = str(config["nodes"])
         qf.append("ibrun tacc_affinity pw.x -nk {} -input {}.scf.in > scf.out".format(nk, prefix))
         qf.append("cd ..")
         qf.append("cp -r wannier/* bands")
@@ -116,7 +120,6 @@ def _write_queuefile_ls5(config):
         qf.append("cd {}".format(wan_dir))
         qf.append("wannier90.x {}".format(prefix))
     elif config["calc"] == "bands_only":
-        nk = str(config["nodes"])
         qf.append("ibrun tacc_affinity pw.x -nk {} -input {}.scf.in > scf.out".format(nk, prefix))
         qf.append("cd ..")
         qf.append("cp -r wannier/* bands")
@@ -136,11 +139,11 @@ def _write_queuefile_ls5(config):
 
     os.chmod(qf_path, stat.S_IRWXU)
 
-def _write_launcherfiles_ls5(config):
-    _write_launcher_qf_ls5(config)
-    _write_launcher_job_ls5(config)
+def _write_launcherfiles_tacc(config):
+    _write_launcher_qf_tacc(config)
+    _write_launcher_job_tacc(config)
 
-def _write_launcher_qf_ls5(config):
+def _write_launcher_qf_tacc(config):
     duration = _ls_format_duration(config["hours"], config["minutes"])
     prefix = config["global_prefix"]
 
@@ -170,7 +173,7 @@ def _write_launcher_qf_ls5(config):
 
     os.chmod(qf_path, stat.S_IRWXU)
 
-def _write_launcher_job_ls5(config):
+def _write_launcher_job_tacc(config):
     prefix_list = config["prefix_list"]
     global_prefix = config["global_prefix"]
 
