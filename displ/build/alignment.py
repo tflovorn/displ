@@ -4,7 +4,8 @@ from ase import Atoms
 import ase.db
 from displ.pwscf.build import build_pw2wan, build_bands, build_qe
 from displ.wannier.build import Winfile
-from displ.queue.queuefile import write_queuefile, write_job_group_files, write_launcherfiles
+from displ.queue.queuefile import (write_queuefile, write_job_group_files, write_launcherfiles,
+        mpi_procs_per_node)
 from displ.build.cell import make_cell
 from displ.build.build import (make_qe_config, get_c_sep, get_wann_valence, get_num_bands,
         _write_qe_input, _write_queuefiles, _get_base_path, _get_work)
@@ -113,9 +114,10 @@ def _main():
         prefixes.append(p)
 
     global_prefix = "alignment"
+    machine = "stampede2"
     num_nodes = 2
-    num_cores = 24*num_nodes
-    queue_config = {"machine": "stampede2", "cores": num_cores, "nodes": num_nodes, "queue": "normal",
+    num_cores = num_nodes * mpi_procs_per_node(machine)
+    queue_config = {"machine": machine, "nodes": num_nodes, "cores": num_cores, "queue": "normal",
             "hours": 12, "minutes": 0, "wannier": True, "project": "A-ph9",
             "global_prefix": global_prefix, "max_jobs": 6,
             "outer_min": -10.0, "outer_max": 5.0,

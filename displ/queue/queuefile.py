@@ -2,6 +2,14 @@ import os
 import stat
 from displ.queue.queue_util import global_config, _base_dir
 
+def mpi_procs_per_node(machine):
+    if machine == "ls5":
+        return 24
+    elif machine == "stampede2":
+        return 68
+    else:
+        raise ValueError("unrecognized machine value")
+
 def write_queuefile(config):
     machine = config["machine"]
 
