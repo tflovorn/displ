@@ -30,6 +30,9 @@ def get_stacking(stacking):
 
     return AB_stacking
 
+def make_prefix(syms):
+    return '_'.join(syms)
+
 def set_up_calculation(db, subdir, syms, AB_stacking, soc, vacuum_dist, D, xc, pp):
     # Choose separation between layers as if the system was a bulk system
     # where all layers are the same as the first layer here.
@@ -47,7 +50,7 @@ def set_up_calculation(db, subdir, syms, AB_stacking, soc, vacuum_dist, D, xc, p
     holes_per_cell = None
     qe_config = make_qe_config(system, D, holes_per_cell, soc, num_bands, xc, pp)
 
-    prefix = '_'.join(syms)
+    prefix = make_prefix(syms)
     work = _get_work(subdir, prefix)
 
     wannier_dir = os.path.join(work, "wannier")
