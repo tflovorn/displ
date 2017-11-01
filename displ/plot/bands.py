@@ -37,6 +37,8 @@ def _main():
             help="Use DFT bands only (no Wannier)")
     parser.add_argument("--fermi_shift", action='store_true',
             help="Shift plotted energies so that E_F = 0")
+    parser.add_argument("--band_extrema", action='store_true',
+            help="Add lines at VBM/CBM")
     parser.add_argument("--minE", type=float, default=None,
             help="Minimum energy to plot")
     parser.add_argument("--maxE", type=float, default=None,
@@ -96,7 +98,7 @@ def _main():
 
     plotBands(qe_bands, Hr, alat, latVecs, minE_plot, maxE_plot, outpath, show=args.show,
             symList=band_path_labels(), fermi_energy=E_F, plot_evecs=args.plot_evecs,
-            comp_groups=comp_groups, fermi_shift=args.fermi_shift)
+            comp_groups=comp_groups, fermi_shift=args.fermi_shift, plot_band_extrema=args.band_extrema)
 
 if __name__ == "__main__":
     _main()

@@ -13,7 +13,7 @@ from displ.pwscf.parseScf import alat_from_scf, latVecs_from_scf
 # Avoids problem of overlapping markers.
 eval_dot_size = True
 
-def plotBands(evalsDFT, Hr, alat, latVecs, minE, maxE, outpath, show=False, symList=None, fermi_energy=None, plot_evecs=False, plot_DFT_evals=True, comp_groups=None, fermi_shift=False):
+def plotBands(evalsDFT, Hr, alat, latVecs, minE, maxE, outpath, show=False, symList=None, fermi_energy=None, plot_evecs=False, plot_DFT_evals=True, comp_groups=None, fermi_shift=False, plot_band_extrema=False):
     '''Create a plot of the eigenvalues given by evalsDFT (which has the form
     returned by extractQEBands()). Additionally, plot the eigenvalues of the
     system described by the Wannier Hamiltonian Hr (which has the form
@@ -63,6 +63,11 @@ def plotBands(evalsDFT, Hr, alat, latVecs, minE, maxE, outpath, show=False, symL
         else:
             Hr_ys, Hr_evecs = _getHks(Hr, Hr_ks, alat, latVecs, plot_evecs,
                     fermi_shift=fermi_shift, fermi_energy=fermi_energy)
+
+    if Hr is not None:
+        valence_max, conduction_min = get_band_extrema(fermi_energy, Hr_ys, fermi_shift)
+    else:
+        valence_max, conduction_min = get_band_extrema(fermi_energy, DFT_ys, fermi_shift)
 
     Hr_ys_eval = None
     if plot_evecs and eval_dot_size:
@@ -120,6 +125,9 @@ def plotBands(evalsDFT, Hr, alat, latVecs, minE, maxE, outpath, show=False, symL
                     plt.plot(DFT_xs, DFT_evs, 'ko', markersize=2)
 
         _set_fermi_energy_line(fermi_shift, fermi_energy)
+        if plot_band_extrema and fermi_energy is not None:
+            _set_extrema_lines(valence_max, conduction_min)
+
         _set_sympoints_ticks(symList, sym_xs)
         _set_plot_boundaries(DFT_xs, minE, maxE, fermi_shift, fermi_energy)
         _save_plot(show, outpath)
@@ -171,12 +179,35 @@ def plotBands(evalsDFT, Hr, alat, latVecs, minE, maxE, outpath, show=False, symL
             _set_plot_boundaries(DFT_xs, minE, maxE, fermi_shift, fermi_energy)
             _save_plot(show, outpath + "_{}".format(str(comp_group_index)))
 
+def get_band_extrema(E_F, Ekns, fermi_shift):
+    if E_F is None:
+        return None, None
+
+    if fermi_shift:
+        E_F_val = 0.0
+    else:
+        E_F_val = E_F
+
+    valence_max, conduction_min = None, None
+    for Ens in Ekns:
+        for E in Ens:
+            if E < E_F_val and (valence_max is None or E > valence_max):
+                valence_max = E
+            if E > E_F_val and (conduction_min is None or E < conduction_min):
+                conduction_min = E
+
+    return valence_max, conduction_min
+
 def _set_fermi_energy_line(fermi_shift, fermi_energy):
     # Line to show Fermi energy.
     if fermi_shift and fermi_energy is not None:
         plt.axhline(0.0, color='k')
     elif fermi_energy is not None:
         plt.axhline(fermi_energy, color='k')
+
+def _set_extrema_lines(valence_max, conduction_min):
+    plt.axhline(valence_max, color='k', linestyle='--')
+    plt.axhline(conduction_min, color='k', linestyle='--')
 
 def _set_sympoints_ticks(symList, sym_xs):
     # Lines and labels for symmetry points.
