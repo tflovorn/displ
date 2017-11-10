@@ -42,7 +42,6 @@ class TestQE(unittest.TestCase):
         vacuum_dist = 20.0 # Angstrom
         D = 0.5 # V/nm
         AB_stacking = True
-        holes_per_cell = 0.0
         xc = 'lda'
         pp = 'nc'
 
@@ -57,7 +56,7 @@ class TestQE(unittest.TestCase):
         wann_valence, num_wann = get_wann_valence(system.get_chemical_symbols(), soc)
         num_bands = get_num_bands(num_wann)
 
-        qe_config = make_qe_config(system, D, holes_per_cell, soc, num_bands, xc, pp)
+        qe_config = make_qe_config(system, D, soc, num_bands, xc, pp)
         #with open('test_build_qe_config_new.json', 'w') as fp:
         #    json.dump(qe_config, fp)
 

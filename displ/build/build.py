@@ -12,7 +12,7 @@ from displ.queue.queuefile import (write_queuefile, write_job_group_files, write
 from displ.build.cell import make_cell, get_layer_system, h_from_2H
 from displ.build.util import _base_dir, _global_config
 
-def make_qe_config(system, D, holes_per_cell, soc, num_bands, xc, pp):
+def make_qe_config(system, D, soc, num_bands, xc, pp):
     latconst = 1.0 # positions in system are given in units of Angstrom
 
     # Assume we take the electric field to be along the c axis.
@@ -60,8 +60,7 @@ def make_qe_config(system, D, holes_per_cell, soc, num_bands, xc, pp):
     qe_config = {"pseudo_dir": pseudo_dir, "pseudo": pseudo, "soc": soc, "latconst": latconst, 
             "num_bands": num_bands, "weight": weight, "ecutwfc": ecutwfc, "ecutrho": ecutrho,
             "degauss": degauss, "conv_thr": conv_thr, "Nk": Nk, "band_path": band_path,
-            "edir": edir, "emaxpos": emaxpos, "eopreg": eopreg, "eamp": eamp,
-            "tot_charge": holes_per_cell}
+            "edir": edir, "emaxpos": emaxpos, "eopreg": eopreg, "eamp": eamp}
 
     return qe_config
 
@@ -316,8 +315,6 @@ def _main():
             help="Maximum displacement field in V/nm")
     parser.add_argument("--numD", type=int, default=10,
             help="Number of displacement field steps")
-    parser.add_argument("--holes", type=float, default=None,
-            help="Holes per unit area (cm^{-2}) to add (default = 0)")
     parser.add_argument("--no_soc", action="store_true",
             help="Turn off spin-orbit coupling")
     parser.add_argument("--xc", type=str, default="lda",
@@ -350,13 +347,6 @@ def _main():
 
     latvecs, at_syms, cartpos = make_cell(db, syms, c_sep, vacuum_dist, AB_stacking)
 
-    # latvecs units = Angstrom
-    cell_area_Angstrom2 = np.linalg.norm(np.cross(latvecs[0], latvecs[1]))
-    if args.holes is not None:
-        holes_per_cell = args.holes * cell_area_Angstrom2 * 1e-16
-    else:
-        holes_per_cell = None
-
     system = Atoms(symbols=at_syms, positions=cartpos, cell=latvecs, pbc=True)
     system.center(axis=2)
 
@@ -367,7 +357,7 @@ def _main():
 
     prefixes = []
     for D in Ds:
-        qe_config = make_qe_config(system, D, holes_per_cell, soc, num_bands, args.xc, args.pp)
+        qe_config = make_qe_config(system, D, soc, num_bands, args.xc, args.pp)
 
         prefix = "{}_{}".format(global_prefix, str(D))
         prefixes.append(prefix)
