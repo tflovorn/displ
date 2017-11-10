@@ -33,7 +33,7 @@ def symbols_from_2H(layer_system):
     # Consistent M, X, X order.
     return at_syms[0], at_syms[1]
 
-def make_cell(db, syms, c_sep, vacuum_dist, AB_stacking=True):
+def make_cell(db, syms, c_sep, vacuum_dist, AB_stacking=True, layer_shifts=None):
     layer_systems = [get_layer_system(db, sym, 'H') for sym in syms]
 
     # Choose lattice constant from first layer.
@@ -46,9 +46,13 @@ def make_cell(db, syms, c_sep, vacuum_dist, AB_stacking=True):
     a2 = a * np.array([1/2, float(np.sqrt(3)/2), 0.0])
     latvecs_2D = np.array([a1[:2], a2[:2]]) # 2D part of D^T
 
+    # Relative shifts of each layer. By default, do not shift.
+    if layer_shifts is None:
+        layer_shifts = [(0.0, 0.0)] * len(layer_systems)
+
     base_z, base_pos = 0.0, 'A'
     at_syms, cartpos = [], []
-    for layer_system, h in zip(layer_systems, hs):
+    for layer_system, h, layer_shift in zip(layer_systems, hs, layer_shifts):
         # Add [X, M, X] to list of atomic symbols.
         layer_M_sym, layer_X_sym = symbols_from_2H(layer_system)
         at_syms.extend([layer_X_sym, layer_M_sym, layer_X_sym])
@@ -58,14 +62,17 @@ def make_cell(db, syms, c_sep, vacuum_dist, AB_stacking=True):
         M_z = base_z + h/2
         X2_z = base_z + h
 
+        # Shift of this layer, if any.
+        d_a, d_b = layer_shift
+
         # In-plane coordinates for this layer.
         if base_pos == 'A':
-            X1_lat = np.array([0.0, 0.0])
-            M_lat = np.array([1/3, 2/3])
+            X1_lat = np.array([(0.0 + d_a) % 1, (0.0 + d_b) % 1])
+            M_lat = np.array([(1/3 + d_a) % 1, (2/3 + d_b) % 1])
             X2_lat = X1_lat
         else:
-            X1_lat = np.array([1/3, 2/3])
-            M_lat = np.array([0.0, 0.0])
+            X1_lat = np.array([(1/3 + d_a) % 1, (2/3 + d_b) % 1])
+            M_lat = np.array([(0.0 + d_a) % 1, (0.0 + d_b) % 1])
             X2_lat = X1_lat
 
         layer_cartpos_2D = [np.dot(atpos_lat, latvecs_2D)

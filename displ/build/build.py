@@ -298,53 +298,8 @@ def _prefix_groups_path(base_path, global_prefix):
     groups_path = os.path.join(base_path, "{}_prefix_groups.json".format(global_prefix))
     return groups_path
 
-def _main():
-    parser = argparse.ArgumentParser("Build and run calculation over displacement field values",
-            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--run", action="store_true",
-            help="Run calculation after making inputs")
-    parser.add_argument("--subdir", type=str, default=None,
-            help="Subdirectory under work_base to run calculation")
-    parser.add_argument("--syms", type=str, default="WSe2;WSe2;WSe2",
-            help="Semicolon-separated list of atomic composition of layers. Format example: WSe2;MoSe2;MoS2")
-    parser.add_argument("--stacking", type=str, default="AB",
-            help="Stacking mode: 'AB' (2H) or 'AA' (1H)")
-    parser.add_argument("--minD", type=float, default=0.01,
-            help="Minimum displacement field in V/nm")
-    parser.add_argument("--maxD", type=float, default=0.5,
-            help="Maximum displacement field in V/nm")
-    parser.add_argument("--numD", type=int, default=10,
-            help="Number of displacement field steps")
-    parser.add_argument("--no_soc", action="store_true",
-            help="Turn off spin-orbit coupling")
-    parser.add_argument("--xc", type=str, default="lda",
-            help="Exchange-correlation functional (lda or pbe)")
-    parser.add_argument("--pp", type=str, default="nc",
-            help="Pseudopotential type ('nc' or 'paw')")
-    args = parser.parse_args()
-
-    syms = _extract_syms(args.syms)
-    global_prefix = "_".join(syms)
-
-    soc = not args.no_soc
-
-    db_path = os.path.join(_base_dir(), "c2dm.db")
-    db = ase.db.connect(db_path)
-
-    # Choose separation between layers as if the system was a bulk system
-    # where all layers are the same as the first layer here.
-    # TODO -- is there a better strategy for this?
-    c_sep = get_c_sep(db, syms[0])
-
-    vacuum_dist = 20.0 # Angstrom
-
-    if args.stacking == 'AB':
-        AB_stacking = True
-    elif args.stacking == 'AA':
-        AB_stacking = False
-    else:
-        raise ValueError("unrecognized value for argument 'stacking'")
-
+def make_system_at_shift(global_prefix, subdir, db, syms, c_sep, vacuum_dist, AB_stacking,
+        soc, xc, pp, Ds, layer_shifts=None):
     latvecs, at_syms, cartpos = make_cell(db, syms, c_sep, vacuum_dist, AB_stacking)
 
     system = Atoms(symbols=at_syms, positions=cartpos, cell=latvecs, pbc=True)
@@ -353,15 +308,13 @@ def _main():
     wann_valence, num_wann = get_wann_valence(system.get_chemical_symbols(), soc)
     num_bands = get_num_bands(num_wann)
 
-    Ds = np.linspace(args.minD, args.maxD, args.numD)
-
     prefixes = []
     for D in Ds:
-        qe_config = make_qe_config(system, D, soc, num_bands, args.xc, args.pp)
+        qe_config = make_qe_config(system, D, soc, num_bands, xc, pp)
 
         prefix = "{}_{}".format(global_prefix, str(D))
         prefixes.append(prefix)
-        work = _get_work(args.subdir, prefix)
+        work = _get_work(subdir, prefix)
 
         wannier_dir = os.path.join(work, "wannier")
         if not os.path.exists(wannier_dir):
@@ -392,6 +345,65 @@ def _main():
         win_path = os.path.join(wannier_dir, "{}.win".format(prefix))
         with open(win_path, 'w') as fp:
             fp.write(wannier_input)
+
+    return prefixes
+
+def _main():
+    parser = argparse.ArgumentParser("Build and run calculation over displacement field values",
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--run", action="store_true",
+            help="Run calculation after making inputs")
+    parser.add_argument("--subdir", type=str, default=None,
+            help="Subdirectory under work_base to run calculation")
+    parser.add_argument("--syms", type=str, default="WSe2;WSe2;WSe2",
+            help="Semicolon-separated list of atomic composition of layers. Format example: WSe2;MoSe2;MoS2")
+    parser.add_argument("--stacking", type=str, default="AB",
+            help="Stacking mode: 'AB' (2H) or 'AA' (1H)")
+    parser.add_argument("--minD", type=float, default=0.01,
+            help="Minimum displacement field in V/nm")
+    parser.add_argument("--maxD", type=float, default=0.5,
+            help="Maximum displacement field in V/nm")
+    parser.add_argument("--numD", type=int, default=10,
+            help="Number of displacement field steps")
+    parser.add_argument("--shifts", type=int, default=None,
+            help="Number of interlayer shifts to include for second layer: if specified, include\
+                  calculations with second layer shifts tiling the unit cell.")
+    parser.add_argument("--no_soc", action="store_true",
+            help="Turn off spin-orbit coupling")
+    parser.add_argument("--xc", type=str, default="lda",
+            help="Exchange-correlation functional (lda or pbe)")
+    parser.add_argument("--pp", type=str, default="nc",
+            help="Pseudopotential type ('nc' or 'paw')")
+    args = parser.parse_args()
+
+    syms = _extract_syms(args.syms)
+    global_prefix = "_".join(syms)
+
+    soc = not args.no_soc
+
+    db_path = os.path.join(_base_dir(), "c2dm.db")
+    db = ase.db.connect(db_path)
+
+    # Choose separation between layers as if the system was a bulk system
+    # where all layers are the same as the first layer here.
+    # TODO -- is there a better strategy for this?
+    c_sep = get_c_sep(db, syms[0])
+
+    vacuum_dist = 20.0 # Angstrom
+
+    if args.stacking == 'AB':
+        AB_stacking = True
+    elif args.stacking == 'AA':
+        AB_stacking = False
+    else:
+        raise ValueError("unrecognized value for argument 'stacking'")
+
+    Ds = np.linspace(args.minD, args.maxD, args.numD)
+
+    prefixes = []
+    if args.shifts is None:
+        prefixes.extend(make_system_at_shift(global_prefix, args.subdir, db, syms, c_sep,
+            vacuum_dist, AB_stacking, soc, args.xc, args.pp, Ds, layer_shifts=None))
 
     machine = "ls5"
     num_nodes = 2
