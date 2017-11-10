@@ -27,8 +27,8 @@ def check_qe_config(testcase, qe_config, qe_config_expected, soc, xc, pp):
 def check_qe_input(testcase, qe_input, qe_input_expected, soc, xc, pp):
     for line, line_expected in zip(qe_input.split('\n'), qe_input_expected.split('\n')):
         # pseudo_dir value is system-dependent.
-        if line.split('=')[0] == 'pseudo_dir':
-            pseudo_dir_expected = get_pseudo_dir(soc, xc, pp)
+        if line.split('=')[0].strip() == 'pseudo_dir':
+            pseudo_dir_expected = "'{}',".format(get_pseudo_dir(soc, xc, pp))
             testcase.assertEqual(line.split('=')[1].strip(), pseudo_dir_expected)
             continue
 
