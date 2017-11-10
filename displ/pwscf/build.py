@@ -114,9 +114,6 @@ def _system(ase_system, calc_type, config):
         nl.append("    eopreg={},".format(str(config["eopreg"])))
         nl.append("    eamp={},".format(str(config["eamp"])))
 
-    if config["tot_charge"] is not None:
-        nl.append("    tot_charge={},".format(str(config["tot_charge"])))
-
     if config["soc"]:
         nl.append("    noncolin=.true.,")
         nl.append("    lspinorb=.true.,")
