@@ -7,7 +7,7 @@ import ase.db
 from displ.pwscf.build import build_qe
 from displ.build.cell import make_cell, get_layer_system, a_from_2H, h_from_2H
 from displ.build.build import (_extract_syms, get_c_sep, get_wann_valence,
-        get_num_bands, make_qe_config, get_pseudo_dir)
+        get_num_bands, make_qe_config, get_pseudo_dir, make_layer_shifts)
 from displ.build.util import _base_dir
 
 def has_pos_seq(all_pos, all_expected_2d):
@@ -15,6 +15,16 @@ def has_pos_seq(all_pos, all_expected_2d):
     for pos, expected in zip(all_pos, all_expected_2d):
         for i in range(2):
             if abs(pos[i] - expected[i]) > eps:
+                return False
+
+    return True
+
+def has_pos_shift(all_pos_zero, all_pos_shifted, layer_shift):
+    eps = 1e-12
+    for pos_zero, pos_shifted in zip(all_pos_zero, all_pos_shifted):
+        for i in range(2):
+            shifted_expected = (pos_zero[i] + layer_shift[i]) % 1
+            if abs(pos_shifted[i] - shifted_expected) > eps:
                 return False
 
     return True
@@ -45,18 +55,18 @@ class TestShift(unittest.TestCase):
                 latvecs_zero, at_syms_zero, cartpos_zero = make_cell(db, syms, c_sep, vacuum_dist,
                         AB_stacking=AB_stacking, layer_shifts=shifts_zero)
 
-                assert((latvecs_None == latvecs_zero).all())
-                assert(at_syms_None == at_syms_zero)
+                self.assertTrue((latvecs_None == latvecs_zero).all())
+                self.assertEqual(at_syms_None, at_syms_zero)
 
                 for at_pos_None, at_pos_zero in zip(cartpos_None, cartpos_zero):
                     assert((at_pos_None == at_pos_zero).all())
 
-                assert(at_syms_zero == ["Se", "W", "Se"] * len(syms))
+                self.assertEqual(at_syms_zero, ["Se", "W", "Se"] * len(syms))
 
                 # Should have the correct lattice constant.
                 eps = 1e-12
-                assert(abs(np.linalg.norm(latvecs_None[0]) - a) < eps)
-                assert(abs(np.linalg.norm(latvecs_None[1]) - a) < eps)
+                self.assertTrue(abs(np.linalg.norm(latvecs_None[0]) - a) < eps)
+                self.assertTrue(abs(np.linalg.norm(latvecs_None[1]) - a) < eps)
 
                 system = Atoms(symbols=at_syms_zero, positions=cartpos_zero,
                         cell=latvecs_zero, pbc=True)
@@ -67,26 +77,75 @@ class TestShift(unittest.TestCase):
 
                 latpos = system.get_scaled_positions()
                 for layer_index in range(len(syms)):
-                    # Atoms should have the correct in-place positions.
+                    # Atoms should have the correct in-plane positions.
                     layer_pos = latpos[3*layer_index:3*layer_index+3]
                     if AB_stacking:
                         if layer_index % 2 == 0:
-                            assert(has_pos_seq(layer_pos, [A, B, A]))
+                            self.assertTrue(has_pos_seq(layer_pos, [A, B, A]))
                         else:
-                            assert(has_pos_seq(layer_pos, [B, A, B]))
+                            self.assertTrue(has_pos_seq(layer_pos, [B, A, B]))
                     else:
-                        assert(has_pos_seq(layer_pos, [A, B, A]))
+                        self.assertTrue(has_pos_seq(layer_pos, [A, B, A]))
                     
                     # Atoms should have the correct vertical positions.
                     h = hs[layer_index]
                     layer_cartpos = cartpos_zero[3*layer_index:3*layer_index+3]
                     zs = [layer_cartpos[i][2] for i in range(3)]
-                    assert(abs(zs[2] - zs[0] - h) < eps)
-                    assert(abs(zs[2] - zs[1] - h/2) < eps)
+                    self.assertTrue(abs(zs[2] - zs[0] - h) < eps)
+                    self.assertTrue(abs(zs[2] - zs[1] - h/2) < eps)
 
                     if layer_index != 0:
                         z_below = cartpos_zero[3*layer_index - 1][2]
-                        assert(abs(zs[0] - z_below - c_sep) < eps)
+                        self.assertTrue(abs(zs[0] - z_below - c_sep) < eps)
+
+    def test_cell_shifted(self):
+        syms_bilayer = ["WSe2", "WSe2"]
+        syms_trilayer = ["WSe2", "WSe2", "WSe2"]
+        vacuum_dist = 20.0 # Angstrom
+        AB_stacking = True
+
+        db_path = os.path.join(_base_dir(), "c2dm.db")
+        db = ase.db.connect(db_path)
+
+        for syms in [syms_bilayer, syms_trilayer]:
+            c_sep = get_c_sep(db, syms[0])
+
+            shifts_zero = [(0.0, 0.0)] * len(syms)
+            num_shifts_l2 = 3
+            all_shifts_nonzero = make_layer_shifts(len(syms), num_shifts_l2)
+
+            for AB_stacking in [False, True]:
+                for layer_shifts in all_shifts_nonzero:
+                    latvecs_zero, at_syms_zero, cartpos_zero = make_cell(db, syms, c_sep, vacuum_dist,
+                            AB_stacking=AB_stacking, layer_shifts=shifts_zero)
+                    latvecs_shift, at_syms_shift, cartpos_shift = make_cell(db, syms, c_sep, vacuum_dist,
+                            AB_stacking=AB_stacking, layer_shifts=layer_shifts)
+
+                    self.assertTrue((latvecs_zero == latvecs_shift).all())
+                    self.assertEqual(at_syms_zero, at_syms_shift)
+
+                    system_zero = Atoms(symbols=at_syms_zero, positions=cartpos_zero,
+                            cell=latvecs_zero, pbc=True)
+                    system_zero.center(axis=2)
+
+                    system_shift = Atoms(symbols=at_syms_shift, positions=cartpos_shift,
+                            cell=latvecs_shift, pbc=True)
+                    system_shift.center(axis=2)
+
+                    latpos_zero = system_zero.get_scaled_positions()
+                    latpos_shift = system_shift.get_scaled_positions()
+                    for layer_index in range(len(syms)):
+                        # Atoms should have the correct in-plane positions.
+                        layer_pos_zero = latpos_zero[3*layer_index:3*layer_index+3]
+                        layer_pos_shift = latpos_shift[3*layer_index:3*layer_index+3]
+
+                        self.assertTrue(has_pos_shift(layer_pos_zero, layer_pos_shift,
+                                layer_shifts[layer_index]))
+
+                        # Atoms should have the correct vertical positions.
+                        eps = 1e-12
+                        for i in range(3):
+                            self.assertTrue(abs(layer_pos_zero[i][2] - layer_pos_shift[i][2]) < eps)
 
 def check_qe_config(testcase, qe_config, qe_config_expected, soc, xc, pp):
     testcase.assertEqual(sorted(qe_config.keys()), sorted(qe_config_expected.keys()))

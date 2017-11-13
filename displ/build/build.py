@@ -298,6 +298,23 @@ def _prefix_groups_path(base_path, global_prefix):
     groups_path = os.path.join(base_path, "{}_prefix_groups.json".format(global_prefix))
     return groups_path
 
+def make_layer_shifts(num_layers, num_shifts_l2):
+    """num_shifts_ls (int): number of shifts to use for the second layer.
+    """
+    all_layer_shifts = []
+    for da in np.linspace(0.0, 1.0, num_shifts_l2, endpoint=False):
+        for db in np.linspace(0.0, 1.0, num_shifts_l2, endpoint=False):
+            layer_shifts = []
+            for layer_index in range(num_layers):
+                if layer_index != 1:
+                    layer_shifts.append((0.0, 0.0))
+                else:
+                    layer_shifts.append((da, db))
+
+            all_layer_shifts.append(layer_shifts)
+
+    return all_layer_shifts
+
 def make_system_at_shift(global_prefix, subdir, db, syms, c_sep, vacuum_dist, AB_stacking,
         soc, xc, pp, Ds, layer_shifts=None):
     latvecs, at_syms, cartpos = make_cell(db, syms, c_sep, vacuum_dist, AB_stacking)
