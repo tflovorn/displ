@@ -43,7 +43,7 @@ class TestShift(unittest.TestCase):
 
                 shifts_zero = [(0.0, 0.0)] * len(syms)
                 latvecs_zero, at_syms_zero, cartpos_zero = make_cell(db, syms, c_sep, vacuum_dist,
-                        AB_stacking=AB_stacking, layer_shifts=None)
+                        AB_stacking=AB_stacking, layer_shifts=shifts_zero)
 
                 assert((latvecs_None == latvecs_zero).all())
                 assert(at_syms_None == at_syms_zero)
