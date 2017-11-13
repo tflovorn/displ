@@ -21,7 +21,7 @@ def has_pos_seq(all_pos, all_expected_2d):
 
 class TestShift(unittest.TestCase):
     def test_cell_unshifted(self):
-        syms_bilayer = ["WSe2", "WSe2", "WSe2"]
+        syms_bilayer = ["WSe2", "WSe2"]
         syms_trilayer = ["WSe2", "WSe2", "WSe2"]
         vacuum_dist = 20.0 # Angstrom
         AB_stacking = True
