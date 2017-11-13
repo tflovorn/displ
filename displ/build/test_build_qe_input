@@ -3,7 +3,7 @@
     restart_mode='from_scratch',
     disk_io='low',
     wf_collect=.true.,
-    pseudo_dir='/home/tim/displ/pseudo/lda_soc',
+    pseudo_dir='/home1/03904/tlovorn/displ/pseudo/lda_soc',
     outdir='./',
     tefield=.true.,
     dipfield=.true.,
@@ -27,8 +27,8 @@
     conv_thr=1e-08
  /
 ATOMIC_SPECIES
- W 183.84 W_r.oncvpsp.upf
  Se 78.971 Se_r.oncvpsp.upf
+ W 183.84 W_r.oncvpsp.upf
 CELL_PARAMETERS alat
  1.65952077037    -2.8743742905    0.0
  1.65952077037    2.8743742905    0.0

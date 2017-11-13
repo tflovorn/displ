@@ -152,7 +152,8 @@ def _electrons(calc_type, conv_thr):
 
 def _atomic_species(pseudo, weight):
     card = ["ATOMIC_SPECIES"]
-    for k, v in pseudo.items():
+    for k in sorted(pseudo.keys()):
+        v = pseudo[k]
         card.append(" {} {} {}".format(k, weight[k], v))
     return "\n".join(card)
 
