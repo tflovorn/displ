@@ -9,6 +9,7 @@ from displ.pwscf.build import build_pw2wan, build_bands, build_qe
 from displ.wannier.build import Winfile
 from displ.queue.queuefile import (write_queuefile, write_job_group_files, write_launcherfiles,
         mpi_procs_per_node)
+from displ.queue.internal import enqueue
 from displ.build.cell import make_cell, get_layer_system, h_from_2H
 from displ.build.util import _base_dir, _global_config
 
@@ -298,6 +299,15 @@ def _prefix_groups_path(base_path, global_prefix):
     groups_path = os.path.join(base_path, "{}_prefix_groups.json".format(global_prefix))
     return groups_path
 
+def submit_pw(base_path, config, prefix_groups, calc_name):
+    config["base_path"] = base_path
+
+    for i in range(len(prefix_groups)):
+        dv_config = deepcopy(config)
+        dv_config["calc"] = "{}_group".format(calc_name)
+        dv_config["prefix"] = str(i)
+        enqueue(dv_config)
+
 def make_layer_shifts(num_layers, num_shifts_l2):
     """num_shifts_ls (int): number of shifts to use for the second layer.
     """
@@ -333,7 +343,7 @@ def make_system_at_shift(global_prefix, subdir, db, syms, c_sep, vacuum_dist, AB
             da2, db2 = layer_shifts[1]
             prefix = "{}_D_{:.4f}_da2_{:.4f}_db2_{:.4f}".format(global_prefix, D, da2, db2)
         else:
-            prefix = "{}_D_{:.4f}".format(global_prefix, str(D))
+            prefix = "{}_{}".format(global_prefix, str(D))
 
         prefixes.append(prefix)
         work = _get_work(subdir, prefix)
@@ -443,7 +453,12 @@ def _main():
             "inner_min": -8.0, "inner_max": 3.0,
             "subdir": args.subdir, "qe_bands":_global_config()['qe_bands']}
 
-    _write_queuefiles(_get_base_path(args.subdir), prefixes, queue_config)
+    base_path = _get_base_path(args.subdir)
+    prefix_groups = _write_queuefiles(base_path, prefixes, queue_config)
+
+    if args.run:
+        calc_name = "wan_setup"
+        submit_pw(base_path, queue_config, prefix_groups, calc_name)
 
 if __name__ == '__main__':
     _main()

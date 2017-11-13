@@ -9,12 +9,12 @@ def enqueue(config):
     machine = config["machine"]
     gconf = global_config()
 
-    if machine == "ls5":
-        _enqueue_ls5(config)
+    if machine == "ls5" or machine == "stampede2":
+        _enqueue_tacc(config)
     else:
         raise ValueError("Unrecognized config['machine'] value")
 
-def _enqueue_ls5(config):
+def _enqueue_tacc(config):
     qf_path = get_qf_path(config)
     cwd = os.getcwd()
 
