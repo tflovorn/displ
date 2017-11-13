@@ -317,7 +317,7 @@ def make_layer_shifts(num_layers, num_shifts_l2):
 
 def make_system_at_shift(global_prefix, subdir, db, syms, c_sep, vacuum_dist, AB_stacking,
         soc, xc, pp, Ds, layer_shifts=None):
-    latvecs, at_syms, cartpos = make_cell(db, syms, c_sep, vacuum_dist, AB_stacking)
+    latvecs, at_syms, cartpos = make_cell(db, syms, c_sep, vacuum_dist, AB_stacking, layer_shifts)
 
     system = Atoms(symbols=at_syms, positions=cartpos, cell=latvecs, pbc=True)
     system.center(axis=2)
@@ -329,7 +329,12 @@ def make_system_at_shift(global_prefix, subdir, db, syms, c_sep, vacuum_dist, AB
     for D in Ds:
         qe_config = make_qe_config(system, D, soc, num_bands, xc, pp)
 
-        prefix = "{}_{}".format(global_prefix, str(D))
+        if layer_shifts is not None:
+            da2, db2 = layer_shifts[1]
+            prefix = "{}_D_{:.4f}_da2_{:.4f}_db2_{:.4f}".format(global_prefix, D, da2, db2)
+        else:
+            prefix = "{}_D_{:.4f}".format(global_prefix, str(D))
+
         prefixes.append(prefix)
         work = _get_work(subdir, prefix)
 
@@ -382,7 +387,7 @@ def _main():
             help="Maximum displacement field in V/nm")
     parser.add_argument("--numD", type=int, default=10,
             help="Number of displacement field steps")
-    parser.add_argument("--shifts", type=int, default=None,
+    parser.add_argument("--shifts_l2", type=int, default=None,
             help="Number of interlayer shifts to include for second layer: if specified, include\
                   calculations with second layer shifts tiling the unit cell.")
     parser.add_argument("--no_soc", action="store_true",
@@ -417,10 +422,16 @@ def _main():
 
     Ds = np.linspace(args.minD, args.maxD, args.numD)
 
+    if args.shifts_l2 is None:
+        all_layer_shifts = [None]
+    else:
+        num_layers = len(syms)
+        all_layer_shifts = make_layer_shifts(num_layers, args.shifts_l2)
+
     prefixes = []
-    if args.shifts is None:
+    for layer_shifts in all_layer_shifts:
         prefixes.extend(make_system_at_shift(global_prefix, args.subdir, db, syms, c_sep,
-            vacuum_dist, AB_stacking, soc, args.xc, args.pp, Ds, layer_shifts=None))
+            vacuum_dist, AB_stacking, soc, args.xc, args.pp, Ds, layer_shifts))
 
     machine = "ls5"
     num_nodes = 2
