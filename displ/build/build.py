@@ -380,6 +380,16 @@ def make_system_at_shift(global_prefix, subdir, db, syms, c_sep, vacuum_dist, AB
 
     return prefixes
 
+def num_layers_label(syms):
+    if len(syms) == 1:
+        return "MONOLAYER"
+    elif len(syms) == 2:
+        return "BILAYER"
+    elif len(syms) == 3:
+        return "TRILAYER"
+    else:
+        return "{}-LAYER".format(len(syms))
+
 def _main():
     parser = argparse.ArgumentParser("Build and run calculation over displacement field values",
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -410,6 +420,8 @@ def _main():
 
     syms = _extract_syms(args.syms)
     global_prefix = "_".join(syms)
+
+    print("Generating inputs for {} system {}.".format(num_layers_label(syms), syms))
 
     soc = not args.no_soc
 
@@ -452,6 +464,9 @@ def _main():
             "outer_min": -10.0, "outer_max": 5.0,
             "inner_min": -8.0, "inner_max": 3.0,
             "subdir": args.subdir, "qe_bands":_global_config()['qe_bands']}
+
+    print("Generating queuefiles for machine {} on {} nodes and {} jobs with max runtime {} hours.".format(machine,
+            num_nodes, queue_config["max_jobs"], queue_config["hours"]))
 
     base_path = _get_base_path(args.subdir)
     prefix_groups = _write_queuefiles(base_path, prefixes, queue_config)
