@@ -295,6 +295,22 @@ def _write_prefix_groups(base_path, global_prefix, prefix_groups):
     with open(groups_path, 'w') as fp:
         json.dump(prefix_groups, fp)
 
+def get_prefix_groups(base_path, global_prefix):
+    groups_path = _prefix_groups_path(base_path, global_prefix)
+    with open(groups_path, 'r') as fp:
+        prefix_groups = json.load(fp)
+
+    return prefix_groups
+
+def get_prefixes(base_path, global_prefix):
+    prefix_groups = get_prefix_groups(base_path, global_prefix)
+    prefixes = []
+    for group in prefix_groups:
+        for prefix in group:
+            prefixes.append(prefix)
+
+    return prefixes
+
 def _prefix_groups_path(base_path, global_prefix):
     groups_path = os.path.join(base_path, "{}_prefix_groups.json".format(global_prefix))
     return groups_path
