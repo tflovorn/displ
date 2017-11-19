@@ -143,7 +143,7 @@ def layer_band_extrema(Es, U, E_F, layer_indices_up, layer_indices_down, layer_t
 
     return conduction, valence
 
-def get_gaps(work, prefix, layer_threshold, k, spin_valence=None, spin_conduction=None, ev_width=8):
+def get_gaps(work, prefix, layer_threshold, k, spin_valence=None, spin_conduction=None):
     wannier_dir = os.path.join(work, prefix, "wannier")
     scf_path = os.path.join(wannier_dir, "scf.out")
     E_F = fermi_from_scf(scf_path)
@@ -233,11 +233,10 @@ def add_curvature(gaps, valence_curvature, conduction_curvature, alat_Bohr):
             ks = {rvc: "{}_{}_effmass_{}".format(layer_label, rvc, Cart_label) for rvc in rvc_labels}
             gaps[ks["reduced"]] = reduced_mass(gaps[ks["valence"]], gaps[ks["conduction"]])
 
-def write_gap_data(work, dps, threshold, spin_valence, spin_conduction, ev_width, k, gap_label,
-        gap_label_tex, layer_labels):
+def get_gap_data(work, dps, threshold, spin_valence, spin_conduction, k, gap_label):
     get_gaps_args = []
     for d, prefix in dps:
-        get_gaps_args.append([work, prefix, threshold, k, spin_valence, spin_conduction, ev_width])
+        get_gaps_args.append([work, prefix, threshold, k, spin_valence, spin_conduction])
 
     with Pool() as p:
         all_gaps = p.starmap(get_gaps, get_gaps_args)
@@ -256,12 +255,13 @@ def write_gap_data(work, dps, threshold, spin_valence, spin_conduction, ev_width
 
             json_gap_data[k].append(v)
 
-    with open("{}_gap_data.yaml".format(gap_label), 'w') as fp:
-        fp.write(yaml.dump(gap_data))
-
     with open("{}_gap_data.json".format(gap_label), 'w') as fp:
         json.dump(json_gap_data, fp)
 
+    return gap_data
+
+def plot_gap_data(gap_data, dps, gap_label, gap_label_tex, layer_labels):
+    # Band extremum energy (keys, filenames, plot labels).
     ds_data_keys = ["0/0", "1/1", "0/1", "1/0", "0_valence", "1_valence", "0_conduction",
             "1_conduction", "conduction_min_partner"]
 
@@ -282,6 +282,7 @@ def write_gap_data(work, dps, threshold, spin_valence, spin_conduction, ev_width
             "{} {} conduction minimum [eV]".format(gap_label_tex, layer1_label),
             "{} conduction minimum partner [eV]".format(gap_label_tex)]
 
+    # Effective mass (keys, filenames, plot labels).
     vcr_labels = ["valence", "conduction", "reduced"]
     vcr_tex_labels = ["valence", "conduction", ""]
     vcr_mass_labels = ["m", "m", "\\mu"]
@@ -293,6 +294,7 @@ def write_gap_data(work, dps, threshold, spin_valence, spin_conduction, ev_width
                 out_filenames.append("{}_layer{}_{}_effmass_{}".format(gap_label, layer_label, vcr_label, kxy_label))
                 plot_labels.append("{} {} {} ${}^*_{}/m_e$".format(gap_label_tex, layer_label_tex, vcr_label_tex, vcr_mass_label, xy_label))
 
+    # Collect and plot data.
     ds_band_data = {}
     for d, gaps in gap_data:
         for k in ds_data_keys:
@@ -315,8 +317,6 @@ def _main():
             help="Set 'up' or 'down' to choose valence band spin type; closest to E_F is used if not set")
     parser.add_argument("--spin_conduction", type=str, default=None,
             help="Set 'up' or 'down' to choose conduction band spin type; closest to E_F is used if not set")
-    parser.add_argument("--ev_width", type=int, default=8,
-            help="Number of characters per eigenvalue in QE bands.dat")
     parser.add_argument('global_prefix', type=str,
             help="Calculation name")
     args = parser.parse_args()
@@ -335,8 +335,10 @@ def _main():
     #layer_labels = ["bot.", "top"]
     layer_labels = ["MoS$_2$", "WS$_2$"]
 
-    write_gap_data(work, dps, args.threshold, args.spin_valence, args.spin_conduction, args.ev_width, K, "K", "$K$",
-            layer_labels)
+    gap_data = get_gap_data(work, dps, args.threshold, args.spin_valence, args.spin_conduction,
+            K, "K")
+
+    plot_gap_data(gap_data, dps, "K", "$K$", layer_labels)
 
 if __name__ == "__main__":
     _main()
