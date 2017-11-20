@@ -23,8 +23,8 @@ def ds_from_prefixes(prefixes):
     ds = []
     for prefix in prefixes:
         sp = prefix.split("_")
-        da_index = sp.index("da") + 1
-        db_index = sp.index("db") + 1
+        da_index = sp.index("da2") + 1
+        db_index = sp.index("db2") + 1
         da, db = float(sp[da_index]), float(sp[db_index])
         ds.append((da, db))
 
@@ -102,16 +102,22 @@ def sort_order(xs, f):
     return order
 
 def get_atom_order(work, prefix):
-    z_order_syms = ["X1", "M", "X2", "X1p", "Mp", "X2p"]
     wannier_dir = os.path.join(work, prefix, "wannier")
     wout_path = os.path.join(wannier_dir, "{}.wout".format(prefix))
 
     atom_symbols, atom_indices, cart_coords = atom_order_from_wout(wout_path)
+    #print(cart_coords)
+    return _find_atom_order(cart_coords)
+
+def _find_atom_order(cart_coords):
+    z_order_syms = ["X1", "M", "X2", "X1p", "Mp", "X2p"]
     z_order = sort_order(cart_coords, lambda x: x[2]) # sort by z coord
 
     atom_Hr_order = []
     for z_val in z_order:
         atom_Hr_order.append(z_order_syms[z_val])
+
+    #print(atom_Hr_order)
 
     return atom_Hr_order
 

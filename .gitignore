@@ -3,3 +3,4 @@ displ.egg-info
 __pycache__
 *.png
 *_bands_export.json
+*_gap_data.json
