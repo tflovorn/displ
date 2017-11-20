@@ -106,18 +106,15 @@ def get_atom_order(work, prefix):
     wout_path = os.path.join(wannier_dir, "{}.wout".format(prefix))
 
     atom_symbols, atom_indices, cart_coords = atom_order_from_wout(wout_path)
-    #print(cart_coords)
     return _find_atom_order(cart_coords)
 
 def _find_atom_order(cart_coords):
     z_order_syms = ["X1", "M", "X2", "X1p", "Mp", "X2p"]
     z_order = sort_order(cart_coords, lambda x: x[2]) # sort by z coord
 
-    atom_Hr_order = []
-    for z_val in z_order:
-        atom_Hr_order.append(z_order_syms[z_val])
-
-    #print(atom_Hr_order)
+    atom_Hr_order = [None]*6
+    for z_index, sym in enumerate(z_order_syms):
+        atom_Hr_order[z_order[z_index]] = sym
 
     return atom_Hr_order
 
