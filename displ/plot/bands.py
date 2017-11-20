@@ -13,7 +13,6 @@ def make_comp_groups(orbitals_per_X, orbitals_per_M, num_layers):
     Xs_per_layer = orbitals_per_X * 2
     Ms_per_layer = orbitals_per_M
 
-
     groups = []
     for layer in range(num_layers):
         X_base = layer*Xs_per_layer

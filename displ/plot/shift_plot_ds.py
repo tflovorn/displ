@@ -30,6 +30,20 @@ def ds_from_prefixes(prefixes):
 
     return ds
 
+def filter_to_D(prefixes, D):
+    eps = 1e-12
+
+    filtered = []
+    for prefix in prefixes:
+        sp = prefix.split("_")
+        D_index = sp.index("D") + 1
+        this_D = float(sp[D_index])
+
+        if abs(D - this_D) < eps:
+            filtered.append(prefix)
+
+    return filtered
+
 def wrap_cell(ds, values):
     wrapped_ds, wrapped_values = [], []
     for d, v in zip(ds, values):

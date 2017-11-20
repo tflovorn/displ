@@ -13,7 +13,7 @@ from displ.wannier.bands import Hk as Hk_Cart
 from displ.build.build import get_prefixes
 from displ.build.util import _global_config
 from displ.plot.shift_plot_ds import (get_atom_order, orbital_index, ds_from_prefixes,
-        wrap_cell, sorted_d_group, plot_d_vals, get_Hr)
+        wrap_cell, sorted_d_group, plot_d_vals, get_Hr, filter_to_D)
 
 def _close(k, q, eps):
     for i in range(len(k)):
@@ -141,6 +141,9 @@ def layer_band_extrema(Es, U, E_F, layer_indices_up, layer_indices_down, layer_t
 
         n += 1
 
+    if any([c is None for c in conduction]) or any([v is None for v in valence]):
+        raise ValueError("failed to find all band extrema")
+
     return conduction, valence
 
 def get_gaps(work, prefix, layer_threshold, k, spin_valence=None, spin_conduction=None):
@@ -190,8 +193,14 @@ def get_gaps(work, prefix, layer_threshold, k, spin_valence=None, spin_conductio
             gaps[k] = float(w[vc_data[layer_index]])
 
     # Minimum of the spin-orbit split partner of the lowest conduction band.
+    # If layer gap is smaller than SO splitting, need to skip a band to find partner.
     conduction_min = min(conduction[0], conduction[1])
-    gaps["conduction_min_partner"] = float(w[conduction_min + 1])
+    if abs(conduction[0] - conduction[1]) == 1:
+        conduction_min_partner = conduction_min + 2
+    else:
+        conduction_min_partner = conduction_min + 1
+
+    gaps["conduction_min_partner"] = float(w[conduction_min_partner])
 
     add_curvature(gaps, valence_curvature, conduction_curvature, alat_Bohr)
 
@@ -317,6 +326,8 @@ def _main():
             help="Set 'up' or 'down' to choose valence band spin type; closest to E_F is used if not set")
     parser.add_argument("--spin_conduction", type=str, default=None,
             help="Set 'up' or 'down' to choose conduction band spin type; closest to E_F is used if not set")
+    parser.add_argument("--D", type=float, default=None,
+            help="Perpendicular electric field value [V/nm]")
     parser.add_argument('global_prefix', type=str,
             help="Calculation name")
     args = parser.parse_args()
@@ -327,13 +338,15 @@ def _main():
         work = os.path.join(work, args.subdir)
 
     prefixes = get_prefixes(work, args.global_prefix)
+    if args.D is not None:
+        prefixes = filter_to_D(prefixes, args.D)
+
     ds = ds_from_prefixes(prefixes)
     ds, prefixes = wrap_cell(ds, prefixes)
     dps = sorted_d_group(ds, prefixes)
 
     K = (1/3, 1/3, 0.0)
-    #layer_labels = ["bot.", "top"]
-    layer_labels = ["MoS$_2$", "WS$_2$"]
+    layer_labels = ["bot.", "top"]
 
     gap_data = get_gap_data(work, dps, args.threshold, args.spin_valence, args.spin_conduction,
             K, "K")
