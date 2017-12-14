@@ -1,5 +1,6 @@
 from __future__ import division
 import argparse
+from copy import deepcopy
 import os
 import itertools
 import numpy as np
@@ -105,7 +106,7 @@ def make_effective_Hamiltonian_Gamma(subdir, prefix, top_two_only, verbose=False
     
     ps_correction = correction_Hamiltonian_ps(Gamma_cart, Hr, latVecs, E_repr, complement_basis, layer_basis)
 
-    ps_tot = ps
+    ps_tot = deepcopy(ps)
     for i, v in enumerate(ps_correction):
         ps_tot[i] += v
     
@@ -114,7 +115,7 @@ def make_effective_Hamiltonian_Gamma(subdir, prefix, top_two_only, verbose=False
 
     mstar_invs_correction_base, mstar_invs_correction_other = correction_Hamiltonian_mstar_inverses(Gamma_cart, Hr, latVecs, E_repr, complement_basis, layer_basis)
 
-    mstar_inv_tot = mstar_invs
+    mstar_inv_tot = deepcopy(mstar_invs)
     for mstar_contrib in [mstar_invs_correction_base, mstar_invs_correction_other]:
         for k, v in mstar_contrib.items():
             mstar_inv_tot[k] += v
