@@ -11,7 +11,7 @@ from displ.kdotp.model_weights_K import top_valence_indices
 from displ.kdotp.separability_K import get_layer_orbitals
 
 def _weight(state, orb1, orb2, fac):
-    '''Construct the weight corresponding to the state |orb1> + fac * |orb2>.
+    '''Construct the weight corresponding to the orbital (1/sqrt(2)) (|orb1> + fac * |orb2>).
     '''
     assert(abs(fac) == 1.0)
 
@@ -66,7 +66,28 @@ def plot_orbital_weights_K(subdir, prefix):
 
     eigenstate_weights = [get_state_weights(layer_orbitals, U[:, [t]]) for t in top]
 
-    print(eigenstate_weights)
+    state_indices = [0, 0, 1, 1, 2, 2]
+    labels = [r"$s_1$; $(+, \uparrow)$", r"$s_1$; $(-, \downarrow)$",
+        r"$s_2$; $(+, \uparrow)$", r"$s_2$; $(-, \downarrow)$",
+        r"$s_3$; $(+, \uparrow)$", r"$s_3$; $(-, \downarrow)$"]
+    weight_keys = ["(+, up)", "(-, down)", "(+, up)", "(-, down)", "(+, up)", "(-, down)"]
+    syms = ["D", "D", "o", "o", "s", "s"]
+    colors = ["black", "red", "black", "red", "black", "red"]
+
+    vals = []
+    for state_index, label, key, sym, color in zip(state_indices, labels, weight_keys, syms, colors):
+        vals.append([])
+        for layer_index in range(num_layers):
+            vals[-1].append(eigenstate_weights[state_index][key][layer_index])
+
+        plt.plot(range(num_layers), vals[-1], "k{}".format(sym), markerfacecolor=(1, 1, 1, 0.0),
+                markeredgecolor=color, label=label, markersize=10)
+
+    plt.xlim(0 - 0.1, num_layers - 1 + 0.1)
+    plt.ylim(0, 1)
+
+    plt.legend(loc=0)
+    plt.savefig("{}_state_components.png".format(prefix), bbox_inches='tight', dpi=500)
 
 def _main():
     parser = argparse.ArgumentParser("Plot orbital contributions at K",
