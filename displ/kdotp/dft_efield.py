@@ -50,6 +50,7 @@ def get_occupations(prefix, subdir, screened, d_bohr, hole_density_bohr2, sigmas
     work = _get_work(subdir, prefix)
     wannier_dir = os.path.join(work, "wannier")
     scf_path = os.path.join(wannier_dir, "scf.out")
+    wout_path = os.path.join(wannier_dir, "{}.wout".format(prefix))
 
     E_F = fermi_from_scf(scf_path)
     latVecs = latVecs_from_scf(scf_path)
@@ -88,7 +89,7 @@ def get_occupations(prefix, subdir, screened, d_bohr, hole_density_bohr2, sigmas
     mstar_K = mstar_top_K[0]
 
     num_layers = 3
-    Pzs = get_layer_projections(num_layers)
+    Pzs = get_layer_projections(wout_path, num_layers)
 
     if hole_density_bohr2 > 0.0:
         tol_abs = 1e-6 * sum(sigmas_initial)

@@ -273,6 +273,7 @@ def make_effective_Hamiltonian_K(k0_lat, subdir, prefix, get_layer_basis, verbos
     work = _get_work(subdir, prefix)
     wannier_dir = os.path.join(work, "wannier")
     scf_path = os.path.join(wannier_dir, "scf.out")
+    wout_path = os.path.join(wannier_dir, "{}.wout".format(prefix))
 
     E_F = fermi_from_scf(scf_path)
     latVecs = latVecs_from_scf(scf_path)
@@ -294,7 +295,7 @@ def make_effective_Hamiltonian_K(k0_lat, subdir, prefix, get_layer_basis, verbos
     Hr_path = os.path.join(wannier_dir, "{}_hr.dat".format(prefix))
     Hr = extractHr(Hr_path)
 
-    Pzs = get_layer_projections(num_layers)
+    Pzs = get_layer_projections(wout_path, num_layers)
 
     H_TB_K = Hk(K_cart, Hr, latVecs)
     Es, U = np.linalg.eigh(H_TB_K)
@@ -428,6 +429,7 @@ def make_effective_Hamiltonian_K(k0_lat, subdir, prefix, get_layer_basis, verbos
             plt.plot(xs, TB_Em, 'k.')
 
         plt.show()
+        plt.clf()
 
         # Effective masses.
         print("effective mass, top valence band, TB model: m^*_{xx; yy; xy} / m_e")

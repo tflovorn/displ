@@ -28,6 +28,7 @@ def _main():
     work = _get_work(args.subdir, args.prefix)
     wannier_dir = os.path.join(work, "wannier")
     scf_path = os.path.join(wannier_dir, "scf.out")
+    wout_path = os.path.join(wannier_dir, "{}.wout".format(args.prefix))
 
     E_F = fermi_from_scf(scf_path)
 
@@ -45,7 +46,7 @@ def _main():
 
     assert(Hr[(0, 0, 0)][0].shape[0] == get_total_orbitals(args.num_layers))
 
-    Pzs = get_layer_projections(args.num_layers)
+    Pzs = get_layer_projections(wout_path, args.num_layers)
 
     num_top_bands = 2*args.num_layers
 

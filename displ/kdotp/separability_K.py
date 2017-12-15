@@ -8,6 +8,7 @@ from displ.build.build import _get_work, band_path_labels
 from displ.pwscf.parseScf import fermi_from_scf
 from displ.wannier.extractHr import extractHr
 from displ.wannier.bands import Hk_recip
+from displ.wannier.parseWout import atom_order_from_wout
 from displ.kdotp.model_weights_K import vec_linspace, top_valence_indices
 
 def density_matrix(states, probabilities):
@@ -79,7 +80,39 @@ def get_total_orbitals(num_layers):
 
     return total_orbitals
 
-def get_layer_orbitals(num_layers):
+def check_layer_order(wout_path):
+    '''Verify that atoms are ordered with all Xs first, then all Ms,
+    and within M/X groups the atoms are in layer order.
+    '''
+    atom_symbols, atom_indices, cart_coords = atom_order_from_wout(wout_path)
+
+    # Verify atom order: chalcogens first, then metals.
+    on_chalcogens = True
+    chalcogens_stop = None
+    for sym_index, sym in enumerate(atom_symbols):
+        if on_chalcogens and sym not in ['S', 'Se', 'Te']:
+            on_chalcogens = False
+            chalcogens_stop = sym_index
+        elif not on_chalcogens:
+            assert(sym in ['Mo', 'W'])
+
+    # Verify atoms within chalcogen group are ordered by z position,
+    # and atoms within metal group are also ordered by z position.
+    atom_ranges = [range(1, chalcogens_stop), range(chalcogens_stop + 1, len(cart_coords))]
+
+    for index_range in atom_ranges:
+        for coord_index in index_range:
+            atom_coords = cart_coords[coord_index]
+            prev_atom_coords = cart_coords[coord_index - 1]
+            assert(atom_coords[2] > prev_atom_coords[2])
+
+def get_layer_orbitals(wout_path, num_layers):
+    '''Assume SOC present and that model has 2*3 X(p) orbitals per layer and
+    2*5 M(d) in canonical Wannier90 order.  Assumes atoms are ordered with all
+    Xs first, then all Ms, and within M/X groups the atoms are in layer order.
+    The assumptions on atom ordering are verfied by check_layer_order().
+    '''
+    check_layer_order(wout_path)
     orbitals_per_X, orbitals_per_M = get_orbital_numbers()
 
     M_base = num_layers * 2 * orbitals_per_X
@@ -90,8 +123,8 @@ def get_layer_orbitals(num_layers):
 
     return layer_orbitals
 
-def get_layer_projections(num_layers):
-    layer_orbitals = get_layer_orbitals(num_layers)
+def get_layer_projections(wout_path, num_layers):
+    layer_orbitals = get_layer_orbitals(wout_path, num_layers)
     total_orbitals = get_total_orbitals(num_layers)
 
     # For each layer, make a projection onto all orbitals in that layer.
@@ -126,6 +159,7 @@ def _main():
     work = _get_work(args.subdir, args.prefix)
     wannier_dir = os.path.join(work, "wannier")
     scf_path = os.path.join(wannier_dir, "scf.out")
+    wout_path = os.path.join(wannier_dir, "{}.wout".format(args.prefix))
 
     E_F = fermi_from_scf(scf_path)
 
@@ -142,7 +176,7 @@ def _main():
 
     assert(Hr[(0, 0, 0)][0].shape[0] == get_total_orbitals(args.num_layers))
 
-    Pzs = get_layer_projections(args.num_layers)
+    Pzs = get_layer_projections(wout_path, args.num_layers)
 
     spin_operators = Pauli_over_full_basis(get_total_orbitals(args.num_layers))
 

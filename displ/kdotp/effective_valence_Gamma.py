@@ -40,6 +40,7 @@ def make_effective_Hamiltonian_Gamma(subdir, prefix, top_two_only, verbose=False
     work = _get_work(subdir, prefix)
     wannier_dir = os.path.join(work, "wannier")
     scf_path = os.path.join(wannier_dir, "scf.out")
+    wout_path = os.path.join(wannier_dir, "{}.wout".format(prefix))
 
     E_F = fermi_from_scf(scf_path)
     latVecs = latVecs_from_scf(scf_path)
@@ -66,7 +67,7 @@ def make_effective_Hamiltonian_Gamma(subdir, prefix, top_two_only, verbose=False
     if top_two_only:
         Pzs = [np.eye(get_total_orbitals(num_layers))]
     else:
-        Pzs = get_layer_projections(num_layers)
+        Pzs = get_layer_projections(wout_path, num_layers)
 
     H_TB_Gamma = Hk(Gamma_cart, Hr, latVecs)
     Es, U = np.linalg.eigh(H_TB_Gamma)
