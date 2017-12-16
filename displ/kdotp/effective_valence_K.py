@@ -229,7 +229,7 @@ def effective_mass_band(Hfn, k0, band_index, alat_Bohr):
 
     return mstars
 
-def get_layer_basis_from_dm_K(U, top, Pzs, verbose):
+def get_layer_basis_from_dm_K(U, top, Pzs, verbose=False):
     top_states = [U[:, [t]] for t in top]
 
     layer_weights, layer_basis = layer_basis_from_dm(top_states, Pzs)
@@ -476,7 +476,22 @@ def make_effective_Hamiltonian_K(k0_lat, subdir, prefix, get_layer_basis, verbos
         print("Bottom group of bands: middle layer - bottom layer; top layer - middle layer")
         print(H0_tot[2, 2] - H0_tot[0, 0], H0_tot[4, 4] - H0_tot[2, 2])
 
+        print("H0")
+        print_H0_LaTeX(H_layer_K)
+
+        print("H0_tot")
+        print_H0_LaTeX(H0_tot)
+
     return H0_tot, ps_tot, mstar_inv_tot
+
+def print_H0_LaTeX(H0):
+    print(r"\begin{pmatrix}")
+    for i in range(H0.shape[0]):
+        row_elems = ["{:.3f} + {:.3f} i".format(e.real, e.imag) for e in H0[i, :]]
+        line = r" & ".join(row_elems) + r" \\"
+        print(line)
+
+    print(r"\end{pmatrix}")
 
 def _main():
     np.set_printoptions(threshold=np.inf)
