@@ -482,6 +482,8 @@ def make_effective_Hamiltonian_K(k0_lat, subdir, prefix, get_layer_basis, verbos
         print("H0_tot")
         print_H0_LaTeX(H0_tot)
 
+        dump_model_np("{}_model_K".format(prefix), H0_tot, ps_tot, mstar_inv_tot)
+
     return H0_tot, ps_tot, mstar_inv_tot
 
 def print_H0_LaTeX(H0):
@@ -492,6 +494,14 @@ def print_H0_LaTeX(H0):
         print(line)
 
     print(r"\end{pmatrix}")
+
+def dump_model_np(fname, H0_tot, ps_tot, mstar_inv_tot):
+    kwds = {"H0": H0_tot, "ps_x": ps_tot[0], "ps_y": ps_tot[1],
+            "mstar_inv_xx": mstar_inv_tot[(0, 0)], "mstar_inv_xy": mstar_inv_tot[(0, 1)],
+            "mstar_inv_yx": mstar_inv_tot[(1, 0)], "mstar_inv_yy": mstar_inv_tot[(1, 1)]}
+
+    fpath = "{}.npz".format(fname)
+    np.savez(fpath, **kwds)
 
 def _main():
     np.set_printoptions(threshold=np.inf)

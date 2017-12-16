@@ -16,7 +16,8 @@ from displ.kdotp.effective_valence_K import (layer_basis_from_dm,
         array_with_rows, layer_Hamiltonian_0th_order, layer_Hamiltonian_ps,
         layer_Hamiltonian_mstar_inverses, correction_Hamiltonian_0th_order,
         correction_Hamiltonian_ps, correction_Hamiltonian_mstar_inverses,
-        correction_Hamiltonian_PQ, H_kdotp, effective_mass_band, print_H0_LaTeX)
+        correction_Hamiltonian_PQ, H_kdotp, effective_mass_band, print_H0_LaTeX,
+        dump_model_np)
 
 def get_layer_basis_Gamma(U, top, Pzs, verbose):
     top_states = [U[:, [t]] for t in top]
@@ -243,6 +244,8 @@ def make_effective_Hamiltonian_Gamma(subdir, prefix, top_two_only, verbose=False
 
         print("H0_tot")
         print_H0_LaTeX(H0_tot)
+
+        dump_model_np("{}_model_Gamma".format(prefix), H0_tot, ps_tot, mstar_inv_tot)
 
     return H0_tot, ps_tot, mstar_inv_tot
 
