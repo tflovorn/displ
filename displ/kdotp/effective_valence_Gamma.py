@@ -179,13 +179,13 @@ def make_effective_Hamiltonian_Gamma(subdir, prefix, top_two_only, verbose=False
             Umks.append([])
 
         for k_index, Hk_layers in enumerate(H_layers):
-            Es, U = np.linalg.eigh(Hk_layers)
+            Es_layers, U_layers = np.linalg.eigh(Hk_layers)
             #print(k_index)
             #print("U", U)
 
             for band_index in range(len(layer_basis)):
-                Emks[band_index].append(Es)
-                Umks[band_index].append(U)
+                Emks[band_index].append(Es_layers)
+                Umks[band_index].append(U_layers)
 
         for band_index in range(len(layer_basis)):
             plt.plot(xs, Emks[band_index])
@@ -239,11 +239,13 @@ def make_effective_Hamiltonian_Gamma(subdir, prefix, top_two_only, verbose=False
         print("H0_tot")
         print(H0_tot)
 
+        Gamma_valence_max = Es[top[0]]
+
         print("H0")
-        print_H0_LaTeX(H_layer_Gamma)
+        print_H0_LaTeX(H_layer_Gamma, Gamma_valence_max)
 
         print("H0_tot")
-        print_H0_LaTeX(H0_tot)
+        print_H0_LaTeX(H0_tot, Gamma_valence_max)
 
         dump_model_np("{}_model_Gamma".format(prefix), H0_tot, ps_tot, mstar_inv_tot)
 

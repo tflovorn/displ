@@ -9,7 +9,7 @@ import numdifftools as nd
 from displ.build.build import _get_work, band_path_labels
 from displ.pwscf.parseScf import fermi_from_scf, latVecs_from_scf, alat_from_scf
 from displ.wannier.extractHr import extractHr
-from displ.wannier.bands import Hk, dHk_dk, d2Hk_dk
+from displ.wannier.bands import Hk, dHk_dk, d2Hk_dk, Hk_recip
 from displ.kdotp.linalg import nullspace
 from displ.kdotp.model_weights_K import vec_linspace, top_valence_indices
 from displ.kdotp.separability_K import get_layer_projections, density_matrix
@@ -476,17 +476,21 @@ def make_effective_Hamiltonian_K(k0_lat, subdir, prefix, get_layer_basis, verbos
         print("Bottom group of bands: middle layer - bottom layer; top layer - middle layer")
         print(H0_tot[2, 2] - H0_tot[0, 0], H0_tot[4, 4] - H0_tot[2, 2])
 
+        H_TB_Gamma = Hk_recip(np.array([0.0, 0.0, 0.0]), Hr)
+        Es_Gamma, U_Gamma = np.linalg.eigh(H_TB_Gamma)
+        Gamma_valence_max = Es_Gamma[top[0]]
+
         print("H0")
-        print_H0_LaTeX(H_layer_K)
+        print_H0_LaTeX(H_layer_K, Gamma_valence_max)
 
         print("H0_tot")
-        print_H0_LaTeX(H0_tot)
+        print_H0_LaTeX(H0_tot, Gamma_valence_max)
 
         dump_model_np("{}_model_K".format(prefix), H0_tot, ps_tot, mstar_inv_tot)
 
     return H0_tot, ps_tot, mstar_inv_tot
 
-def print_H0_LaTeX(H0):
+def print_H0_LaTeX(H0, diag_zero_real):
     def _truncate(x):
         x_str = "{:.3f}".format(x)
 
@@ -498,8 +502,12 @@ def print_H0_LaTeX(H0):
     print(r"\begin{pmatrix}")
     for i in range(H0.shape[0]):
         row_elems = []
-        for e in H0[i, :]:
-            er, ei = _truncate(e.real), _truncate(e.imag)
+        for j, e in enumerate(H0[i, :]):
+            if i != j:
+                er, ei = _truncate(e.real), _truncate(e.imag)
+            else:
+                er, ei = _truncate(e.real - diag_zero_real), _truncate(e.imag)
+
             if ei != "0":
                 if ei[0] == "-":
                     row_elems.append("{} - {} i".format(er, ei[1:]))
