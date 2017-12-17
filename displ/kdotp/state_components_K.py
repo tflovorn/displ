@@ -8,14 +8,15 @@ from displ.pwscf.parseScf import fermi_from_scf
 from displ.wannier.extractHr import extractHr
 from displ.wannier.bands import Hk_recip
 from displ.kdotp.model_weights_K import top_valence_indices
-from displ.kdotp.separability_K import get_layer_orbitals
+from displ.kdotp.separability_K import get_layer_orbitals, get_layer_projections
+from displ.kdotp.effective_valence_K import get_layer_basis_from_dm_K
 
 def _weight(state, orb1, orb2, fac):
     '''Construct the weight corresponding to the orbital (1/sqrt(2)) (|orb1> + fac * |orb2>).
     '''
     assert(abs(fac) == 1.0)
 
-    total = (1.0/np.sqrt(2.0)) * (state[[orb1, 0]] + fac.conjugate() * state[[orb2, 0]])
+    total = (1.0/np.sqrt(2.0)) * (state[orb1, 0] + fac.conjugate() * state[orb2, 0])
     return np.linalg.norm(total)**2
 
 def get_state_weights(layer_orbitals, state):
@@ -89,6 +90,34 @@ def plot_orbital_weights_K(subdir, prefix):
     plt.legend(loc=0)
     plt.savefig("{}_state_components.png".format(prefix), bbox_inches='tight', dpi=500)
 
+def print_orbital_weights_dm_K(subdir, prefix):
+    num_layers = 3
+    assert(num_layers == 3) # != 3 unimplemented
+
+    work = _get_work(subdir, prefix)
+    wannier_dir = os.path.join(work, "wannier")
+    scf_path = os.path.join(wannier_dir, "scf.out")
+    wout_path = os.path.join(wannier_dir, "{}.wout".format(prefix))
+
+    E_F = fermi_from_scf(scf_path)
+    layer_orbitals = get_layer_orbitals(wout_path, num_layers)
+    Pzs = get_layer_projections(wout_path, num_layers)
+
+    Hr_path = os.path.join(wannier_dir, "{}_hr.dat".format(prefix))
+    Hr = extractHr(Hr_path)
+
+    K_lat = np.array([1/3, 1/3, 0.0])
+    H_TB_K = Hk_recip(K_lat, Hr)
+    Es, U = np.linalg.eigh(H_TB_K)
+    top = top_valence_indices(E_F, 2*num_layers, Es)
+
+    layer_weights, layer_basis = get_layer_basis_from_dm_K(U, top, Pzs)
+
+    dm_basis_weights = [get_state_weights(layer_orbitals, s) for s in layer_basis]
+
+    print("dm basis weights")
+    print(dm_basis_weights)
+
 def _main():
     parser = argparse.ArgumentParser("Plot orbital contributions at K",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -99,6 +128,7 @@ def _main():
     args = parser.parse_args()
 
     plot_orbital_weights_K(args.subdir, args.prefix)
+    print_orbital_weights_dm_K(args.subdir, args.prefix)
 
 if __name__ == "__main__":
     _main()

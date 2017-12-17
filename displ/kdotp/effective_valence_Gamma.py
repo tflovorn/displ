@@ -19,7 +19,7 @@ from displ.kdotp.effective_valence_K import (layer_basis_from_dm,
         correction_Hamiltonian_PQ, H_kdotp, effective_mass_band, print_H0_LaTeX,
         dump_model_np)
 
-def get_layer_basis_Gamma(U, top, Pzs, verbose):
+def get_layer_basis_Gamma(U, top, Pzs, verbose=False):
     top_states = [U[:, [t]] for t in top]
 
     layer_weights, layer_basis = layer_basis_from_dm(top_states, Pzs)
