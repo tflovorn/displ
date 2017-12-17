@@ -487,9 +487,27 @@ def make_effective_Hamiltonian_K(k0_lat, subdir, prefix, get_layer_basis, verbos
     return H0_tot, ps_tot, mstar_inv_tot
 
 def print_H0_LaTeX(H0):
+    def _truncate(x):
+        x_str = "{:.3f}".format(x)
+
+        if x_str == "0.000" or x_str == "-0.000":
+            return "0"
+
+        return x_str
+
     print(r"\begin{pmatrix}")
     for i in range(H0.shape[0]):
-        row_elems = ["{:.3f} + {:.3f} i".format(e.real, e.imag) for e in H0[i, :]]
+        row_elems = []
+        for e in H0[i, :]:
+            er, ei = _truncate(e.real), _truncate(e.imag)
+            if ei != "0":
+                if ei[0] == "-":
+                    row_elems.append("{} - {} i".format(er, ei[1:]))
+                else:
+                    row_elems.append("{} + {} i".format(er, ei))
+            else:
+                row_elems.append(er)
+
         line = r" & ".join(row_elems) + r" \\"
         print(line)
 
