@@ -1,4 +1,5 @@
 from __future__ import division
+import cmath
 import argparse
 from copy import deepcopy
 import os
@@ -487,6 +488,17 @@ def make_effective_Hamiltonian_K(k0_lat, subdir, prefix, get_layer_basis, verbos
         print_H0_LaTeX(H0_tot, Gamma_valence_max)
 
         dump_model_np("{}_model_K".format(prefix), H0_tot, ps_tot, mstar_inv_tot)
+
+        phases = {(i, j): cmath.phase(H0_tot[i, j]) for i, j in [(0, 3), (1, 2), (2, 5), (3, 4)]}
+
+        phase_factors = list(map(lambda x: np.exp(-1j * x), [-phases[(0, 3)], -phases[(1, 2)], 0.0, 0.0,
+                phases[(3, 4)], phases[(2, 5)]]))
+        phase_U = np.diag(phase_factors)
+
+        H0_tot_real_hop = np.dot(phase_U.conjugate().T, np.dot(H0_tot, phase_U))
+
+        print("H0_tot_real_hop")
+        print_H0_LaTeX(H0_tot_real_hop, Gamma_valence_max)
 
     return H0_tot, ps_tot, mstar_inv_tot
 
