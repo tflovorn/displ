@@ -1,0 +1,39 @@
+ &control
+    calculation='scf',
+    restart_mode='from_scratch',
+    disk_io='low',
+    wf_collect=.true.,
+    pseudo_dir='/home1/03904/tlovorn/tmd/pseudo/lda_soc',
+    outdir='./',
+    prefix='MoS2_WS2_da_0.000_db_0.000'
+ /
+ &system
+    ibrav=0,celldm(1)=6.017013706229457,nat=6,ntyp=3,
+    ecutwfc=60.0,
+    ecutrho=240.0,
+    noncolin=.true.,
+    lspinorb=.true.,
+    occupations='tetrahedra'
+ /
+ &electrons
+    startingwfc='random',
+    diagonalization='david',
+    conv_thr=1e-08
+ /
+ATOMIC_SPECIES
+ W 183.85 W_r.oncvpsp.upf
+ S 32.066 S_r.oncvpsp.upf
+ Mo 95.94 Mo_r.oncvpsp.upf
+CELL_PARAMETERS alat
+ 0.5    -0.8660254037844386    0.0
+ 0.5    0.8660254037844386    0.0
+ 0.0    0.0    9.197215405334788
+ATOMIC_POSITIONS crystal
+
+
+
+
+
+
+K_POINTS automatic
+18 18 1 0 0 0
