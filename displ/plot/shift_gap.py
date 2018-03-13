@@ -146,7 +146,8 @@ def layer_band_extrema(Es, U, E_F, layer_indices_up, layer_indices_down, layer_t
 
     return conduction, valence
 
-def get_gaps(work, prefix, layer_threshold, k, spin_valence=None, spin_conduction=None):
+def get_gaps(work, prefix, layer_threshold, k, spin_valence=None, spin_conduction=None,
+        use_curvature=True):
     wannier_dir = os.path.join(work, prefix, "wannier")
     scf_path = os.path.join(wannier_dir, "scf.out")
     E_F = fermi_from_scf(scf_path)
@@ -202,7 +203,8 @@ def get_gaps(work, prefix, layer_threshold, k, spin_valence=None, spin_conductio
 
     gaps["conduction_min_partner"] = float(w[conduction_min_partner])
 
-    add_curvature(gaps, valence_curvature, conduction_curvature, alat_Bohr)
+    if use_curvature:
+        add_curvature(gaps, valence_curvature, conduction_curvature, alat_Bohr)
 
     return gaps
 
@@ -242,10 +244,10 @@ def add_curvature(gaps, valence_curvature, conduction_curvature, alat_Bohr):
             ks = {rvc: "{}_{}_effmass_{}".format(layer_label, rvc, Cart_label) for rvc in rvc_labels}
             gaps[ks["reduced"]] = reduced_mass(gaps[ks["valence"]], gaps[ks["conduction"]])
 
-def get_gap_data(work, dps, threshold, spin_valence, spin_conduction, k, gap_label):
+def get_gap_data(work, dps, threshold, spin_valence, spin_conduction, k, gap_label, use_curvature=True):
     get_gaps_args = []
     for d, prefix in dps:
-        get_gaps_args.append([work, prefix, threshold, k, spin_valence, spin_conduction])
+        get_gaps_args.append([work, prefix, threshold, k, spin_valence, spin_conduction, use_curvature])
 
     with Pool() as p:
         all_gaps = p.starmap(get_gaps, get_gaps_args)
@@ -269,7 +271,7 @@ def get_gap_data(work, dps, threshold, spin_valence, spin_conduction, k, gap_lab
 
     return gap_data
 
-def plot_gap_data(gap_data, dps, gap_label, gap_label_tex, layer_labels):
+def plot_gap_data(gap_data, dps, gap_label, gap_label_tex, layer_labels, use_curvature=True):
     # Band extremum energy (keys, filenames, plot labels).
     ds_data_keys = ["0/0", "1/1", "0/1", "1/0", "0_valence", "1_valence", "0_conduction",
             "1_conduction", "conduction_min_partner"]
@@ -292,16 +294,17 @@ def plot_gap_data(gap_data, dps, gap_label, gap_label_tex, layer_labels):
             "{} conduction minimum partner [eV]".format(gap_label_tex)]
 
     # Effective mass (keys, filenames, plot labels).
-    vcr_labels = ["valence", "conduction", "reduced"]
-    vcr_tex_labels = ["valence", "conduction", ""]
-    vcr_mass_labels = ["m", "m", "\\mu"]
+    if use_curvature:
+        vcr_labels = ["valence", "conduction", "reduced"]
+        vcr_tex_labels = ["valence", "conduction", ""]
+        vcr_mass_labels = ["m", "m", "\\mu"]
 
-    for layer_label, layer_label_tex in zip(["0", "1"], [layer0_label, layer1_label]):
-        for vcr_label, vcr_label_tex, vcr_mass_label in zip(vcr_labels, vcr_tex_labels, vcr_mass_labels):
-            for kxy_label, xy_label in zip(["kx", "ky"], ["x", "y"]):
-                ds_data_keys.append("{}_{}_effmass_{}".format(layer_label, vcr_label, kxy_label))
-                out_filenames.append("{}_layer{}_{}_effmass_{}".format(gap_label, layer_label, vcr_label, kxy_label))
-                plot_labels.append("{} {} {} ${}^*_{}/m_e$".format(gap_label_tex, layer_label_tex, vcr_label_tex, vcr_mass_label, xy_label))
+        for layer_label, layer_label_tex in zip(["0", "1"], [layer0_label, layer1_label]):
+            for vcr_label, vcr_label_tex, vcr_mass_label in zip(vcr_labels, vcr_tex_labels, vcr_mass_labels):
+                for kxy_label, xy_label in zip(["kx", "ky"], ["x", "y"]):
+                    ds_data_keys.append("{}_{}_effmass_{}".format(layer_label, vcr_label, kxy_label))
+                    out_filenames.append("{}_layer{}_{}_effmass_{}".format(gap_label, layer_label, vcr_label, kxy_label))
+                    plot_labels.append("{} {} {} ${}^*_{}/m_e$".format(gap_label_tex, layer_label_tex, vcr_label_tex, vcr_mass_label, xy_label))
 
     # Collect and plot data.
     ds_band_data = {}
@@ -320,7 +323,9 @@ def _main():
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--subdir", type=str, default=None,
             help="Subdirectory under work_base where calculation was run")
-    parser.add_argument("--threshold", type=float, default=0.9,
+    parser.add_argument("--threshold_K", type=float, default=0.9,
+            help="Threshold for deciding if a state is dominated by one layer")
+    parser.add_argument("--threshold_Gamma", type=float, default=0.6,
             help="Threshold for deciding if a state is dominated by one layer")
     parser.add_argument("--spin_valence", type=str, default=None,
             help="Set 'up' or 'down' to choose valence band spin type; closest to E_F is used if not set")
@@ -348,10 +353,15 @@ def _main():
     K = (1/3, 1/3, 0.0)
     layer_labels = ["bot.", "top"]
 
-    gap_data = get_gap_data(work, dps, args.threshold, args.spin_valence, args.spin_conduction,
+    gap_data_K = get_gap_data(work, dps, args.threshold_K, args.spin_valence, args.spin_conduction,
             K, "K")
+    plot_gap_data(gap_data_K, dps, "K", "$K$", layer_labels)
 
-    plot_gap_data(gap_data, dps, "K", "$K$", layer_labels)
+    Gamma = (0.0, 0.0, 0.0)
+
+    gap_data_Gamma = get_gap_data(work, dps, args.threshold_Gamma, args.spin_valence, args.spin_conduction,
+            Gamma, "Gamma", use_curvature=False)
+    plot_gap_data(gap_data_Gamma, dps, "Gamma", r"$\Gamma$", layer_labels, use_curvature=False)
 
 if __name__ == "__main__":
     _main()
