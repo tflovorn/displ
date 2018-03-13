@@ -45,9 +45,9 @@ def build_qe(ase_system, prefix, calc_type, config):
     '''Construct a string which gives the QE input file for the specified
     calculation.
 
-    calc_type: one of 'scf', 'nscf', 'bands'.
+    calc_type: one of 'relax', 'scf', 'nscf', 'bands'.
     '''
-    calc_vals = ["scf", "nscf", "bands"]
+    calc_vals = ["relax", "scf", "nscf", "bands"]
     if calc_type not in calc_vals:
         raise ValueError("Unsupported calc_type " + calc_type)
 
@@ -60,9 +60,10 @@ def build_qe(ase_system, prefix, calc_type, config):
     blocks = [("control", _control(calc_type, pseudo_dir, config["eamp"], prefix)),
             ("system", _system(ase_system, calc_type, config)),
             ("electrons", _electrons(calc_type, conv_thr)),
+            ("ions", _ions(calc_type)),
             ("atomic_species", _atomic_species(config["pseudo"], config["weight"])),
             ("cell_parameters", _cell_parameters(axes)),
-            ("atomic_positions",  _atomic_positions(latpos)),
+            ("atomic_positions",  _atomic_positions(calc_type, config["interlayer_relax"], latpos)),
             ("k_points", _k_points(calc_type, config))]
 
     # Join the sections with newlines, ignoring any None values.
@@ -87,6 +88,9 @@ def _control(calc_type, pseudo_dir, eamp, prefix):
     nl.append("    wf_collect=.true.,")
     nl.append("    pseudo_dir='{}',".format(pseudo_dir))
     nl.append("    outdir='./',")
+
+    # For relaxation, use default values of `etot_conv_thr` and `forc_conv_thr`.
+    # Default force of 10^{-3} Ry/Bohr = 1.4 x 10^{-4} eV / Angstrom.
 
     if eamp is not None:
         nl.append("    tefield=.true.,")
@@ -118,11 +122,13 @@ def _system(ase_system, calc_type, config):
         nl.append("    noncolin=.true.,")
         nl.append("    lspinorb=.true.,")
 
+    if calc_type in ['nscf', 'bands']:
+        nl.append("    nosym=.true.,")
+        nl.append("    nbnd={},".format(config["num_bands"]))
+
     if calc_type == 'scf':
         nl.append("    occupations='tetrahedra'")
     else:
-        nl.append("    nosym=.true.,")
-        nl.append("    nbnd={},".format(config["num_bands"]))
         nl.append("    occupations='smearing',smearing='cold',degauss={}".format(str(config["degauss"])))
 
     nl.append(" /")    
@@ -142,13 +148,22 @@ def _electrons(calc_type, conv_thr):
     nl = [" &electrons"]
     nl.append("    startingwfc='atomic+random',")
     nl.append("    diagonalization='david',")
-    if calc_type == 'scf':
+    if calc_type == 'scf' or calc_type == 'relax':
         nl.append("    conv_thr={}".format(str(conv_thr)))
     else:
         nl.append("    diago_thr_init={}".format(str(conv_thr)))
 
     nl.append(" /")
     return "\n".join(nl)
+
+def _ions(calc_type):
+    if calc_type == "relax":
+        nl = [" &ions"]
+        nl.append(" /")
+
+        return "\n".join(nl)
+    else:
+        return None
 
 def _atomic_species(pseudo, weight):
     card = ["ATOMIC_SPECIES"]
@@ -164,16 +179,25 @@ def _cell_parameters(axes):
         card.append(" {}    {}    {}".format(ax, ay, az))
     return "\n".join(card)
 
-def _atomic_positions(pos):
+def _atomic_positions(calc_type, interlayer_relax, pos):
     card = ["ATOMIC_POSITIONS crystal"]
     for atom, p in pos:
         pa, pb, pc = str(p[0]), str(p[1]), str(p[2])
-        card.append(" {} {} {} {}".format(atom, pa, pb, pc))
+        pos_line = " {} {} {} {}".format(atom, pa, pb, pc)
+        if calc_type != "relax":
+            card.append(pos_line)
+        elif interlayer_relax:
+            pos_interlayer_relax_line = "{} 0 0 1".format(pos_line)
+            card.append(pos_interlayer_relax_line)
+        else:
+            pos_all_relax_line = "{} 1 1 1".format(pos_line)
+            card.append(pos_all_relax_line)
+
     return "\n".join(card)
 
 def _k_points(calc_type, config):
-    if calc_type == 'scf':
-        Nk1, Nk2, Nk3 = config["Nk"]["scf"]
+    if calc_type == 'scf' or calc_type == 'relax':
+        Nk1, Nk2, Nk3 = config["Nk"][calc_type]
 
         card = ["K_POINTS automatic"]
         card.append("{} {} {} 0 0 0".format(Nk1, Nk2, Nk3))
@@ -190,8 +214,7 @@ def _k_points(calc_type, config):
             card.append("    {} {} {} {}".format(str(k[0]), str(k[1]), str(k[2]), str(weight)))
 
         return "\n".join(card)
-    else:
-        # calc_type == 'bands'
+    elif calc_type == 'bands':
         num_points = len(config["band_path"])
         Nkband = config["Nk"]["bands"]
 
@@ -201,6 +224,8 @@ def _k_points(calc_type, config):
             card.append(" {} {} {} {}".format(str(k[0]), str(k[1]), str(k[2]), Nkband))
 
         return "\n".join(card)
+    else:
+        raise ValueError("unrecognized calc_type")
 
 def nscf_ks(Nk1, Nk2, Nk3):
     '''Returns a list of [k1, k2, k3] values giving the ks to be included

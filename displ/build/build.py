@@ -13,7 +13,7 @@ from displ.queue.internal import enqueue
 from displ.build.cell import make_cell, get_layer_system, h_from_2H
 from displ.build.util import _base_dir, _global_config
 
-def make_qe_config(system, D, soc, num_bands, xc, pp):
+def make_qe_config(system, D, interlayer_relax, soc, num_bands, xc, pp):
     latconst = 1.0 # positions in system are given in units of Angstrom
 
     # Assume we take the electric field to be along the c axis.
@@ -45,6 +45,7 @@ def make_qe_config(system, D, soc, num_bands, xc, pp):
     weight = get_weight(system)
 
     conv_thr = {"scf": 1e-8, "nscf": 1e-8, "bands": 1e-8}
+    conv_thr["relax"] = conv_thr["scf"]
 
     degauss = 0.02
 
@@ -52,13 +53,15 @@ def make_qe_config(system, D, soc, num_bands, xc, pp):
     Nk_nscf = 18
     Nk_bands = 20
     Nk = {"scf": [Nk_scf, Nk_scf, 1], "nscf": [Nk_nscf, Nk_nscf, 1], "bands": Nk_bands}
+    Nk["relax"] = Nk["scf"]
 
     band_path = [[0.0, 0.0, 0.0], # Gamma
         [0.5, 0.0, 0.0], # M
         [1/3, 1/3, 0.0], # K
         [0.0, 0.0, 0.0]] # Gamma
 
-    qe_config = {"pseudo_dir": pseudo_dir, "pseudo": pseudo, "soc": soc, "latconst": latconst, 
+    qe_config = {"pseudo_dir": pseudo_dir, "pseudo": pseudo, "interlayer_relax": interlayer_relax,
+            "soc": soc, "latconst": latconst, 
             "num_bands": num_bands, "weight": weight, "ecutwfc": ecutwfc, "ecutrho": ecutrho,
             "degauss": degauss, "conv_thr": conv_thr, "Nk": Nk, "band_path": band_path,
             "edir": edir, "emaxpos": emaxpos, "eopreg": eopreg, "eamp": eamp}
@@ -342,7 +345,7 @@ def make_layer_shifts(num_layers, num_shifts_l2):
     return all_layer_shifts
 
 def make_system_at_shift(global_prefix, subdir, db, syms, c_sep, vacuum_dist, AB_stacking,
-        soc, xc, pp, Ds, layer_shifts=None):
+        interlayer_relax, soc, xc, pp, Ds, layer_shifts=None):
     latvecs, at_syms, cartpos = make_cell(db, syms, c_sep, vacuum_dist, AB_stacking, layer_shifts)
 
     system = Atoms(symbols=at_syms, positions=cartpos, cell=latvecs, pbc=True)
@@ -353,13 +356,18 @@ def make_system_at_shift(global_prefix, subdir, db, syms, c_sep, vacuum_dist, AB
 
     prefixes = []
     for D in Ds:
-        qe_config = make_qe_config(system, D, soc, num_bands, xc, pp)
+        qe_config = make_qe_config(system, D, interlayer_relax, soc, num_bands, xc, pp)
+
+        if D is None:
+            D_str = "0.0000"
+        else:
+            D_str = "{:.4f}".format(D)
 
         if layer_shifts is not None:
             da2, db2 = layer_shifts[1]
-            prefix = "{}_D_{:.4f}_da2_{:.4f}_db2_{:.4f}".format(global_prefix, D, da2, db2)
+            prefix = "{}_D_{}_da2_{:.4f}_db2_{:.4f}".format(global_prefix, D_str, da2, db2)
         else:
-            prefix = "{}_{}".format(global_prefix, str(D))
+            prefix = "{}_{}".format(global_prefix, D_str)
 
         prefixes.append(prefix)
         work = _get_work(subdir, prefix)
@@ -372,10 +380,16 @@ def make_system_at_shift(global_prefix, subdir, db, syms, c_sep, vacuum_dist, AB
         if not os.path.exists(bands_dir):
             os.makedirs(bands_dir)
 
-        dirs = {'scf': wannier_dir, 'nscf': wannier_dir, 'bands': bands_dir}
+        dirs = {'relax': wannier_dir, 'scf': wannier_dir, 'nscf': wannier_dir,
+                'bands': bands_dir}
 
         qe_input = {}
-        for calc_type in ['scf', 'nscf', 'bands']:
+        if interlayer_relax:
+            calc_types = ['relax', 'scf', 'nscf', 'bands']
+        else:
+            calc_types = ['scf', 'nscf', 'bands']
+
+        for calc_type in calc_types:
             qe_input[calc_type] = build_qe(system, prefix, calc_type, qe_config)
             _write_qe_input(prefix, dirs[calc_type], qe_input, calc_type)
 
@@ -422,10 +436,12 @@ def _main():
     parser.add_argument("--maxD", type=float, default=0.5,
             help="Maximum displacement field in V/nm")
     parser.add_argument("--numD", type=int, default=10,
-            help="Number of displacement field steps")
+            help="Number of displacement field steps. Set to 0 to not use displacement field.")
     parser.add_argument("--shifts_l2", type=int, default=None,
             help="Number of interlayer shifts to include for second layer: if specified, include\
                   calculations with second layer shifts tiling the unit cell.")
+    parser.add_argument("--interlayer_relax", action="store_true",
+            help="Relax in the out-of-plane direction before performing scf")
     parser.add_argument("--no_soc", action="store_true",
             help="Turn off spin-orbit coupling")
     parser.add_argument("--xc", type=str, default="lda",
@@ -458,7 +474,10 @@ def _main():
     else:
         raise ValueError("unrecognized value for argument 'stacking'")
 
-    Ds = np.linspace(args.minD, args.maxD, args.numD)
+    if args.numD == 0:
+        Ds = [None]
+    else:
+        Ds = np.linspace(args.minD, args.maxD, args.numD)
 
     if args.shifts_l2 is None:
         all_layer_shifts = [None]
@@ -469,14 +488,15 @@ def _main():
     prefixes = []
     for layer_shifts in all_layer_shifts:
         prefixes.extend(make_system_at_shift(global_prefix, args.subdir, db, syms, c_sep,
-            vacuum_dist, AB_stacking, soc, args.xc, args.pp, Ds, layer_shifts))
+            vacuum_dist, AB_stacking, soc, args.interlayer_relax, args.xc, args.pp, Ds, layer_shifts))
 
-    machine = "ls5"
-    num_nodes = 2
+    machine = "stampede2"
+    num_nodes = 1
     num_cores = num_nodes * mpi_procs_per_node(machine)
     queue_config = {"machine": machine, "cores": num_cores, "nodes": num_nodes, "queue": "normal",
             "hours": 12, "minutes": 0, "wannier": True, "project": "A-ph9",
             "global_prefix": global_prefix, "max_jobs": 1,
+            "relax": args.interlayer_relax,
             "outer_min": -10.0, "outer_max": 5.0,
             "inner_min": -8.0, "inner_max": 3.0,
             "subdir": args.subdir, "qe_bands":_global_config()['qe_bands']}

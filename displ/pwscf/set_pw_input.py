@@ -1,3 +1,4 @@
+import argparse
 from displ.pwscf.parseScf import final_coordinates_from_scf
 
 def with_coordinates(pw_in_path, positions_type, atom_symbols, atom_positions):
@@ -44,3 +45,17 @@ def set_relaxed_coordinates(pw_in_paths, relax_path):
 
         with open(path, 'w') as fp:
             fp.write(relaxed_input)
+
+def _main():
+    parser = argparse.ArgumentParser("Set coordinates to relaxed value",
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("relaxed_output", type=str,
+            help="Path to pw.x relaxed output text file")
+    parser.add_argument("input_to_change", type=str,
+            help="Path to pw.x input file to change to relaxed coordinates")
+    args = parser.parse_args()
+
+    set_relaxed_coordinates([args.input_to_change], args.relaxed_output)
+
+if __name__ == "__main__":
+    _main()
