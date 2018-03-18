@@ -47,6 +47,9 @@ def make_qe_config(system, D, interlayer_relax, soc, num_bands, xc, pp):
     conv_thr = {"scf": 1e-8, "nscf": 1e-8, "bands": 1e-8}
     conv_thr["relax"] = conv_thr["scf"]
 
+    eV_per_Angstrom_in_Ry_per_Bohr = 0.5291772 / 13.605693
+    force_conv_thr = 3e-3 * eV_per_Angstrom_in_Ry_per_Bohr
+
     degauss = 0.02
 
     Nk_scf = 18
@@ -61,7 +64,7 @@ def make_qe_config(system, D, interlayer_relax, soc, num_bands, xc, pp):
         [0.0, 0.0, 0.0]] # Gamma
 
     qe_config = {"pseudo_dir": pseudo_dir, "pseudo": pseudo, "interlayer_relax": interlayer_relax,
-            "soc": soc, "latconst": latconst, 
+            "force_conv_thr": force_conv_thr, "soc": soc, "latconst": latconst,
             "num_bands": num_bands, "weight": weight, "ecutwfc": ecutwfc, "ecutrho": ecutrho,
             "degauss": degauss, "conv_thr": conv_thr, "Nk": Nk, "band_path": band_path,
             "edir": edir, "emaxpos": emaxpos, "eopreg": eopreg, "eamp": eamp}
@@ -390,7 +393,14 @@ def make_system_at_shift(global_prefix, subdir, db, syms, c_sep, vacuum_dist, AB
             calc_types = ['scf', 'nscf', 'bands']
 
         for calc_type in calc_types:
-            qe_input[calc_type] = build_qe(system, prefix, calc_type, qe_config)
+            # Turn off SOC for relaxation.
+            if calc_type == 'relax':
+                relax_soc = False
+                qe_config_no_soc = make_qe_config(system, D, interlayer_relax, relax_soc, num_bands, xc, pp)
+                qe_input[calc_type] = build_qe(system, prefix, calc_type, qe_config_no_soc)
+            else:
+                qe_input[calc_type] = build_qe(system, prefix, calc_type, qe_config)
+
             _write_qe_input(prefix, dirs[calc_type], qe_input, calc_type)
 
         pw2wan_input = build_pw2wan(prefix, soc)

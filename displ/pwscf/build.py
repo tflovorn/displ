@@ -57,7 +57,8 @@ def build_qe(ase_system, prefix, calc_type, config):
 
     # Make strings representing each section of the PW input.
     # These may be None.
-    blocks = [("control", _control(calc_type, pseudo_dir, config["eamp"], prefix)),
+    blocks = [("control", _control(calc_type, pseudo_dir, config["force_conv_thr"],
+                    config["eamp"], prefix)),
             ("system", _system(ase_system, calc_type, config)),
             ("electrons", _electrons(calc_type, conv_thr)),
             ("ions", _ions(calc_type)),
@@ -80,7 +81,7 @@ def _join(xs):
             ret = "\n".join([ret, x])
     return ret + "\n"
 
-def _control(calc_type, pseudo_dir, eamp, prefix):
+def _control(calc_type, pseudo_dir, force_conv_thr, eamp, prefix):
     nl = [" &control"]
     nl.append("    calculation='{}',".format(calc_type))
     nl.append("    restart_mode='from_scratch',")
@@ -89,8 +90,8 @@ def _control(calc_type, pseudo_dir, eamp, prefix):
     nl.append("    pseudo_dir='{}',".format(pseudo_dir))
     nl.append("    outdir='./',")
 
-    # For relaxation, use default values of `etot_conv_thr` and `forc_conv_thr`.
-    # Default force of 10^{-3} Ry/Bohr = 1.4 x 10^{-4} eV / Angstrom.
+    if calc_type == 'relax':
+        nl.append("    forc_conv_thr={},".format(str(force_conv_thr)))
 
     if eamp is not None:
         nl.append("    tefield=.true.,")
