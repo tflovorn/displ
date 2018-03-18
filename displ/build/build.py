@@ -507,7 +507,7 @@ def _main():
             "hours": 12, "minutes": 0, "wannier": True, "project": "A-ph9",
             "global_prefix": global_prefix, "max_jobs": 1,
             "relax": args.interlayer_relax,
-            "outer_min": -10.0, "outer_max": 5.0,
+            "outer_min": -10.0, "outer_max": 6.0,
             "inner_min": -8.0, "inner_max": 3.0,
             "subdir": args.subdir, "qe_bands":_global_config()['qe_bands']}
 
