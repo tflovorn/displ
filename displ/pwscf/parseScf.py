@@ -116,7 +116,45 @@ def total_energy_eV_from_scf(scf_path):
 
     return total_energy_eV
 
+def initial_coordinates_from_scf(scf_path):
+    '''Return the initial atomic coordinates, given in Cartesian coordinates
+    in units of alat.
+    '''
+    with open(scf_path, 'r') as fp:
+        lines = fp.readlines()
+
+    coordinates_header_line = None
+    for i, line in enumerate(lines):
+        if line.strip() == "Cartesian axes":
+            coordinates_header_line = i
+
+    if coordinates_header_line is None:
+        raise ValueError("could not find initial coordinates")
+
+    # Expect the following - check to make sure units are as expected.
+    #     site n.     atom                  positions (alat units)
+    second_header_line = lines[coordinates_header_line + 2].strip()
+    if second_header_line.split()[-2] != "(alat":
+        raise ValueError("expected initial coordinates header")
+
+    atom_symbols = []
+    atom_alat_Cartesian_positions = []
+    coordinate_line = coordinates_header_line + 3
+    while len(lines[coordinate_line].strip()) > 0:
+        line = list(filter(lambda x: len(x) > 0, lines[coordinate_line].strip().split()))
+        atom_symbols.append(line[1])
+        atom_alat_Cartesian_positions.append(list(map(lambda x: float(x), line[6:9])))
+
+        coordinate_line += 1
+
+    return atom_symbols, atom_alat_Cartesian_positions
+
 def final_coordinates_from_scf(scf_path):
+    '''Extract the final atomic coordinates produced by a relaxation run.
+
+    Returns a tuple `(positions_type, atom_symbols, atom_positions)`,
+    where `positions_type` gives the coordinate type
+    '''
     with open(scf_path, 'r') as fp:
         lines = fp.readlines()
 

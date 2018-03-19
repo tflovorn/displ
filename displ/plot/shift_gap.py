@@ -6,7 +6,8 @@ from multiprocessing import Pool
 import numpy as np
 import yaml
 import numdifftools
-from displ.pwscf.parseScf import fermi_from_scf, D_from_scf, alat_from_scf
+from displ.pwscf.parseScf import (fermi_from_scf, D_from_scf, alat_from_scf,
+        initial_coordinates_from_scf, final_coordinates_from_scf)
 from displ.pwscf.extractQEBands import extractQEBands
 from displ.wannier.bands import Hk_recip
 from displ.wannier.bands import Hk as Hk_Cart
@@ -318,6 +319,101 @@ def plot_gap_data(gap_data, dps, gap_label, gap_label_tex, layer_labels, use_cur
     for k, fname, plot_label in zip(ds_data_keys, out_filenames, plot_labels):
         plot_d_vals(fname, plot_label, dps, ds_band_data[k])
 
+def interlayer_distances(work, prefix):
+    '''Get interlayer distances in Angstrom for initial and relaxed system.
+    '''
+    wannier_dir = os.path.join(work, prefix, "wannier")
+    relax_path = os.path.join(wannier_dir, "relax.out")
+
+    alat = alat_from_scf(relax_path)
+    D = D_from_scf(relax_path)
+
+    Angstrom_per_Bohr = 0.52917721
+    D_Angstrom = D * alat * Angstrom_per_Bohr
+
+    # (Sort positions by out-of-plane coordinate.)
+    (atom_symbols_initial_unsorted,
+            atom_alat_positions_initial_unsorted) = initial_coordinates_from_scf(relax_path)
+    initial_sorted = sorted(zip(atom_symbols_initial_unsorted,
+            atom_alat_positions_initial_unsorted), key=lambda x: x[1][2])
+    atom_symbols_initial = [i[0] for i in initial_sorted]
+    atom_alat_positions_initial = [i[1] for i in initial_sorted]
+
+    (positions_type_relaxed, atom_symbols_relaxed_unsorted,
+            atom_positions_relaxed_unsorted) = final_coordinates_from_scf(relax_path)
+
+    if positions_type_relaxed != "crystal":
+        raise ValueError("unexpected relaxed positions type")
+
+    relaxed_sorted = sorted(zip(atom_symbols_relaxed_unsorted,
+            atom_positions_relaxed_unsorted), key=lambda x: x[1][2])
+    atom_symbols_relaxed = [i[0] for i in relaxed_sorted]
+    atom_positions_relaxed = [i[1] for i in relaxed_sorted]
+
+    if atom_symbols_initial != atom_symbols_relaxed:
+        raise ValueError("atoms changed ordering in relaxation")
+
+    atom_Angstrom_positions_initial = [[p * alat * Angstrom_per_Bohr for p in pos] for pos in atom_alat_positions_initial]
+    atom_Angstrom_positions_relaxed = [np.dot(np.array(pos), D_Angstrom.T) for pos in atom_positions_relaxed]
+
+    # Assume there are 3 atoms per layer (i.e. not a supercell).
+    def get_interlayer(n, all_pos):
+        return all_pos[n + 1][2] - all_pos[n][2]
+
+    interlayer_dists_initial, interlayer_dists_relaxed = [], []
+    num_atoms = len(atom_symbols_initial)
+    for n in range(2, num_atoms - 1, 3):
+        interlayer_dists_initial.append(get_interlayer(n, atom_Angstrom_positions_initial))
+        interlayer_dists_relaxed.append(get_interlayer(n, atom_Angstrom_positions_relaxed))
+
+    return interlayer_dists_initial, interlayer_dists_relaxed
+
+def get_relax_data(work, dps):
+    all_relax_data = []
+    for d, prefix in dps:
+        interlayer_dists_initial, interlayer_dists_relaxed = interlayer_distances(work, prefix)
+        interlayer_differences = list(map(lambda x: x[0] - x[1],
+                zip(interlayer_dists_relaxed, interlayer_dists_initial)))
+
+        relax = {}
+        for i, diff in enumerate(interlayer_differences):
+            k = "interlayer_distance_change_layer_{}_{}".format(i, i+1)
+            relax[k] = diff
+
+        all_relax_data.append(relax)
+
+    relax_data = []
+    # For JSON output, use same format as plot_ds.
+    json_relax_data = {"_ds": []}
+
+    for (d, prefix), relax in zip(dps, all_relax_data):
+        relax_data.append([list(d), relax])
+
+        json_relax_data["_ds"].append(d)
+        for k, v in relax.items():
+            if k not in json_relax_data:
+                json_relax_data[k] = []
+
+            json_relax_data[k].append(v)
+
+    with open("relax_data.json", 'w') as fp:
+        json.dump(json_relax_data, fp)
+
+    return relax_data
+
+def plot_relax_data(relax_data, dps):
+    ds_data = {}
+    for d, relax in relax_data:
+        for k, v in relax.items():
+            if k in ds_data:
+                ds_data[k].append(v)
+            else:
+                ds_data[k] = [v]
+
+    for k, v in ds_data.items():
+        fname, plot_label = k, k
+        plot_d_vals(fname, plot_label, dps, v)
+
 def _main():
     parser = argparse.ArgumentParser("Calculation of gaps",
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -352,6 +448,9 @@ def _main():
 
     K = (1/3, 1/3, 0.0)
     layer_labels = ["bot.", "top"]
+
+    relax_data = get_relax_data(work, dps)
+    plot_relax_data(relax_data, dps)
 
     gap_data_K = get_gap_data(work, dps, args.threshold_K, args.spin_valence, args.spin_conduction,
             K, "K")
