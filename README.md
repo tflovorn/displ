@@ -26,7 +26,7 @@ Install python3:
 
 Add to ~/.bashrc:
 
-    export PATH=$HOME/python3.5/bin
+    export PATH=$HOME/python3.5/bin:$PATH
     export PYTHONPATH=$HOME/python3.5/lib/python3.5/site-packages:$PYTHONPATH
     export CPATH=$HOME/local:$CPATH
     export LIBRARY_PATH=$HOME/local:$LIBRARY_PATH
