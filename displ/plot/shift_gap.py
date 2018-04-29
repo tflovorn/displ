@@ -376,6 +376,10 @@ def get_relax_data(work, dps):
                 zip(interlayer_dists_relaxed, interlayer_dists_initial)))
 
         relax = {}
+        for i, dist in enumerate(interlayer_dists_relaxed):
+            k = "interlayer_distance_relaxed_layer_{}_{}".format(i, i+1)
+            relax[k] = dist
+
         for i, diff in enumerate(interlayer_differences):
             k = "interlayer_distance_change_layer_{}_{}".format(i, i+1)
             relax[k] = diff
