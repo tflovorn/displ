@@ -498,7 +498,7 @@ def _main():
     prefixes = []
     for layer_shifts in all_layer_shifts:
         prefixes.extend(make_system_at_shift(global_prefix, args.subdir, db, syms, c_sep,
-            vacuum_dist, AB_stacking, soc, args.interlayer_relax, args.xc, args.pp, Ds, layer_shifts))
+            vacuum_dist, AB_stacking, args.interlayer_relax, soc, args.xc, args.pp, Ds, layer_shifts))
 
     machine = "stampede2"
     num_nodes = 1
