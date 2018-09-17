@@ -171,7 +171,7 @@ def get_c_sep(db, sym):
     Yun et al., PRB 85, 033305 (2012)
     The a and c lattice constants given in this table are experimental values.
     '''
-    c_bulk_values = {"MoS2": 12.296, "MoSe2": 12.939,
+    c_bulk_values = {"MoS2": 12.296, "MoSe2": 12.939, "MoTe2": 13.968,
             "WS2": 12.349, "WSe2": 12.976}
     c_bulk = c_bulk_values[sym]
 
@@ -206,8 +206,7 @@ def get_wann_valence(at_syms, soc=True):
 
     return wann_valence, num_wann
 
-def get_num_bands(num_wann):
-    extra_bands_factor = 2.0
+def get_num_bands(num_wann, extra_bands_factor):
     num_bands = int(np.ceil(extra_bands_factor*num_wann))
     if num_bands % 2 == 1:
         num_bands += 1
@@ -348,14 +347,14 @@ def make_layer_shifts(num_layers, num_shifts_l2):
     return all_layer_shifts
 
 def make_system_at_shift(global_prefix, subdir, db, syms, c_sep, vacuum_dist, AB_stacking,
-        interlayer_relax, soc, xc, pp, Ds, layer_shifts=None):
+        interlayer_relax, soc, xc, pp, Ds, extra_bands_factor, layer_shifts=None):
     latvecs, at_syms, cartpos = make_cell(db, syms, c_sep, vacuum_dist, AB_stacking, layer_shifts)
 
     system = Atoms(symbols=at_syms, positions=cartpos, cell=latvecs, pbc=True)
     system.center(axis=2)
 
     wann_valence, num_wann = get_wann_valence(system.get_chemical_symbols(), soc)
-    num_bands = get_num_bands(num_wann)
+    num_bands = get_num_bands(num_wann, extra_bands_factor)
 
     prefixes = []
     for D in Ds:
@@ -458,6 +457,10 @@ def _main():
             help="Exchange-correlation functional (lda or pbe)")
     parser.add_argument("--pp", type=str, default="nc",
             help="Pseudopotential type ('nc' or 'paw')")
+    parser.add_argument("--extra_bands_factor", type=float, default=2.0,
+            help="Factor (NSCF_bands / Wannier_bands). Appropriate value depends on number of "
+                 "semi-core states in pseudopotential. 2.0 OK for sulfides / selenides; "
+                 "3.0 OK for tellurides")
     args = parser.parse_args()
 
     syms = _extract_syms(args.syms)
@@ -498,16 +501,17 @@ def _main():
     prefixes = []
     for layer_shifts in all_layer_shifts:
         prefixes.extend(make_system_at_shift(global_prefix, args.subdir, db, syms, c_sep,
-            vacuum_dist, AB_stacking, args.interlayer_relax, soc, args.xc, args.pp, Ds, layer_shifts))
+            vacuum_dist, AB_stacking, args.interlayer_relax, soc, args.xc, args.pp, Ds,
+            args.extra_bands_factor, layer_shifts))
 
     machine = "stampede2"
     num_nodes = 1
     num_cores = num_nodes * mpi_procs_per_node(machine)
     queue_config = {"machine": machine, "cores": num_cores, "nodes": num_nodes, "queue": "normal",
-            "hours": 12, "minutes": 0, "wannier": True, "project": "A-ph9",
+            "hours": 36, "minutes": 0, "wannier": True, "project": "A-ph9",
             "global_prefix": global_prefix, "max_jobs": 1,
             "relax": args.interlayer_relax,
-            "outer_min": -10.0, "outer_max": 6.0,
+            "outer_min": -10.5, "outer_max": 6.5,
             "inner_min": -8.0, "inner_max": 3.0,
             "subdir": args.subdir, "qe_bands":_global_config()['qe_bands']}
 
